@@ -18,3 +18,19 @@ int main()
     printf("%s\n", upordown() ? "Up" : "Down");
     return 0;
 }
+
+/****
+ * Alternative approach
+ *
+ * bool upordown(int *other) {
+ *  int x;
+ *
+ *  if(!other) {
+ *      return upordown(&x);
+ *  } else {
+ *      return &x > other;
+ *  }
+ * }
+ *
+ *
+ */
