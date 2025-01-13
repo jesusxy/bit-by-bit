@@ -47,3 +47,54 @@ Objective of this part is to create a compiler that parses the input string and 
 
 - C does not support exceptions which is why we use `enum` result codes
 - The compiler will complain if a switch statement does not handle a member of the enum, giving us confidence that all results of a function were handled
+
+### Part III
+
+---
+
+For now, this db will:
+
+- support two operations: inserting a row and printing all rows
+- reside only in memory (no persistence to disk)
+- support a single, hard-coded table
+
+The db schema will be:
+
+| Column   | Type         |
+| -------- | ------------ |
+| id       | integer      |
+| username | varchar(32)  |
+| email    | varchar(255) |
+
+The **insert** statement will be `insert 1 cstack foo@bar.com`
+
+To copy the data given by the insert command, we need to create a data structure that represents the table.
+
+The plan is:
+
+- Store rows in **blocks** of memory called `pages`
+- Each page stores as many rows as it can fit
+- Rows are **serialized** into compact representations with each page
+- Pages are only allocated as needed
+- Keep a fixed-size array of **pointers** to pages
+
+The serialized row will not look like:
+| Column | Size (bytes) | Offset |
+|-----------|--------------|--------|
+| id | 4 | 0 |
+| username | 32 | 4 |
+| email | 255 | 36 |
+| total | 291 | |
+
+#### Takeaways | TIL
+
+---
+
+1. (Struct\*)0 is a type cast telling the compiler to treat 0 as a pointer to a structure of type Struct. Zero is used because its the `null pointer constant`, it doesnt point to any memory.
+2. The entire expression `sizeof(((Struct*)0)->Attribute)` calculates the size of member **Attribute** in the **Struct** type
+
+The purpose of `(Struct*)0` is to avoid the need for an acutal **instance** of the structure. Its useful when we need to compute **sizes** of structure members _dynamically_ at compile time.
+
+`sizeof` operates on **types** or **expressions** to compute `sizeof(id)` within `Row` we need a **context** where the compiler knows we are referring to `id` as part of the struct.
+
+When using the `->` operator it requires a _pointer_ to access the members of the struct. Since `Row` is a **type** and not an **instance** doing `(Struct*)0` gives the compiler enough context to "pretent" there is a structure instance at address 0. It allows the compiler to resolve the members type without memory access.
