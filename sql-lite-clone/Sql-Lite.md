@@ -2,6 +2,10 @@
 
 ---
 
+### Part I
+
+---
+
 `SQL Query` goes through the following components.
 On the **front-end**
 
@@ -34,3 +38,9 @@ For composite structures we want to
 
 1. free nested allocations first
 2. free the struct itself
+
+### Part II
+
+---
+
+Objective of this part is to create a compiler that parses the input string and outputs `bytecode`. This will then get passed to our VM to be processed.
