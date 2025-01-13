@@ -15,6 +15,17 @@ typedef enum
     PREPARE_SUCCESS,
     PREPARE_UNRECOGNIZED_STATEMENT
 } PrepareResult;
+
+typedef enum
+{
+    STATEMENT_INSERT,
+    STATEMENT_SELECT
+} StatementType;
+
+typedef struct
+{
+    StatementType type;
+} Statement;
 typedef struct
 {
     char *buffer;         // points to a dynamically allocated memory region
@@ -69,6 +80,38 @@ MetaCommandResult do_meta_command(InputBuffer *input_buffer)
     }
 }
 
+// this is our "SQL Compiler"
+PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement)
+{
+    // strncmp limits the string comparison to 6 chars
+    if (strncmp(input_buffer->buffer, "insert", 6) == 0)
+    {
+        statement->type = STATEMENT_INSERT;
+        return PREPARE_SUCCESS;
+    }
+
+    if (strcmp(input_buffer->buffer, "select") == 0)
+    {
+        statement->type = STATEMENT_SELECT;
+        return PREPARE_SUCCESS;
+    }
+
+    return PREPARE_UNRECOGNIZED_STATEMENT;
+}
+
+void execute_statement(Statement *statement)
+{
+    switch (statement->type)
+    {
+    case (STATEMENT_INSERT):
+        printf("This is where we would do an insert.\n");
+        break;
+    case (STATEMENT_SELECT):
+        printf("This is where we would do a select.\n");
+        break;
+    }
+}
+
 int main(int arc, char *argv[])
 {
     InputBuffer *input_buffer = new_input_buffer();
@@ -78,7 +121,7 @@ int main(int arc, char *argv[])
         print_prompt();
         read_input(input_buffer);
 
-        if (input_buffer->buffer[0] == ".")
+        if (input_buffer->buffer[0] == '.')
         {
             switch (do_meta_command(input_buffer))
             {
@@ -94,10 +137,10 @@ int main(int arc, char *argv[])
 
         switch (prepare_statement(input_buffer, &statement))
         {
-        case (PREPARE_SUCESS):
+        case (PREPARE_SUCCESS):
             break;
         case (PREPARE_UNRECOGNIZED_STATEMENT):
-            print("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
+            printf("Unrecognized keyword at start of '%s'.\n", input_buffer->buffer);
             continue;
         }
 
