@@ -44,3 +44,6 @@ For composite structures we want to
 ---
 
 Objective of this part is to create a compiler that parses the input string and outputs `bytecode`. This will then get passed to our VM to be processed.
+
+- C does not support exceptions which is why we use `enum` result codes
+- The compiler will complain if a switch statement does not handle a member of the enum, giving us confidence that all results of a function were handled
