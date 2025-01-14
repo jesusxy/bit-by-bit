@@ -86,6 +86,10 @@ The serialized row will now look like:
 | email | 255 | 36 |
 | total | 291 | |
 
+We set the size of page to `4kb` because this is the size of a page in most virtual memory systems. One db page corresponds to one page used by the OS.
+
+The OS will move pages in and out of memory as **whole** units instead of breaking them up.
+
 #### Takeaways | TIL
 
 ---
