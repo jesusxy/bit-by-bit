@@ -102,3 +102,13 @@ The purpose of `(Struct*)0` is to avoid the need for an acutal **instance** of t
 `sizeof` operates on **types** or **expressions** to compute `sizeof(id)` within `Row` we need a **context** where the compiler knows we are referring to `id` as part of the struct.
 
 When using the `->` operator it requires a _pointer_ to access the members of the struct. Since `Row` is a **type** and not an **instance** doing `(Struct*)0` gives the compiler enough context to "pretent" there is a structure instance at address 0. It allows the compiler to resolve the members type without memory access.
+
+3. 'Initializer element is not a compile time constant' error
+
+When compiling the program after adding the page / row functionality I was receiving the above error. To fix this issue I reordered the file and moved _enums_ and _structs_ atop the file before any constants.
+
+What I learned is that the compiler processes the file from top to bottom. The issue the compiler was complaining about was due to not having these definitions first before their use.
+
+Constants like `EMAIL_SIZE` depend on the size of `Row` members. If Row is not declared, the compiler cannot resolve the dependency.
+
+The best practice is to declare `structs, enums, typedef` at the beginning of the file or in a header file.
