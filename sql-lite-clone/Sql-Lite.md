@@ -78,7 +78,7 @@ The plan is:
 - Pages are only allocated as needed
 - Keep a fixed-size array of **pointers** to pages
 
-The serialized row will not look like:
+The serialized row will now look like:
 | Column | Size (bytes) | Offset |
 |-----------|--------------|--------|
 | id | 4 | 0 |
