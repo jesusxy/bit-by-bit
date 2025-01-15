@@ -96,6 +96,16 @@ It will be stored as: `['A', 'l', 'i', 'c', 'e', '\0', ...]`
 
 "alice@example.com" would be stored as `['a', 'l', 'i', 'c', 'e', '@', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm', '\0', ...]`
 
+### Part V
+
+---
+
+Peristing records to memory will be done by the **Pager**.
+
+- We ask the pager for page number x
+- it first looks in the cache
+- if there is a cache miss, it copies data from disk into memory
+
 #### Takeaways | TIL
 
 ---
