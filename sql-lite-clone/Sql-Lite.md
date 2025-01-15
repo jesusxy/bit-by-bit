@@ -90,6 +90,12 @@ We set the size of page to `4kb` because this is the size of a page in most virt
 
 The OS will move pages in and out of memory as **whole** units instead of breaking them up.
 
+Strings in C are `null terminated character sequences` \
+Example: "Alice"
+It will be stored as: `['A', 'l', 'i', 'c', 'e', '\0', ...]`
+
+"alice@example.com" would be stored as `['a', 'l', 'i', 'c', 'e', '@', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm', '\0', ...]`
+
 #### Takeaways | TIL
 
 ---
