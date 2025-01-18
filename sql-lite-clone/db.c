@@ -148,12 +148,12 @@ void *get_page(Pager *pager, uint32_t page_num)
 
 void *row_slot(Table *table, uint32_t row_num)
 {
-    uint32_t page_num = row_num / ROWS_PER_PAGE;
+    uint32_t page_num = row_num / ROWS_PER_PAGE; // find page num
 
     void *page = get_page(table->pager, page_num);
 
-    uint32_t row_offset = row_num % ROWS_PER_PAGE;
-    uint32_t byte_offset = row_offset * ROW_SIZE;
+    uint32_t row_offset = row_num % ROWS_PER_PAGE; // finds the row position within the page
+    uint32_t byte_offset = row_offset * ROW_SIZE;  // find exact location of row in memory
     return page + byte_offset;
 }
 
