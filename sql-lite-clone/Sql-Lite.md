@@ -106,6 +106,67 @@ Peristing records to memory will be done by the **Pager**.
 - it first looks in the cache
 - if there is a cache miss, it copies data from disk into memory
 
+Each `PAGE` will hold a **fixed number** of `rows` **(ROWS_PER_PAGE)**. The database file will be divided into pages of size **(PAGE_SIZE)**, these are fixed chunks of memory (4096 bytes).
+
+Pages act as units of `reading and writing` data to disk. Reading data in "chunks" minimizes the number of disk operations, a single page read will handle multiple rows.
+To locate a specific row:
+
+- jump to a specific page
+- locate the row within that page
+
+Example: Database file = 16kb, Page Size = 4 kb. The file will be divided into 4 pages
+
+```
+Page 0: 0 - 4095
+Page 1: 4096 - 8191
+Page 2: 8192 - 12287
+Page 3: 12288 - 16383
+
+```
+
+##### Loading DB
+
+When we load the database file we need to know how many **rows** are already present in the file. To do this we have to `divide` the total file size **(file_length)** by the
+size of each row **(ROW_SIZE)**
+
+Example:
+
+```
+file_length = 1168 bytes
+ROW_SIZE = 292 bytes
+
+num_rows = 1168 / 292 = 4 rows of records
+```
+
+Lets take another example:
+
+```
+file_length: 8192 bytes (file size)
+PAGE_SIZE = 4096 bytes
+ROW_SIZE = 292 bytes
+
+num_pages = file_length / PAGE_SIZE = 8192 / 4096 = 2 full pages
+ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE = 4096 / 292 = 14 rows per page
+num_rows = file_length / ROW_SIZE = 8192 / 292 = 28 rows total in file
+```
+
+With the numbers above we have a database with 28 rows, these rows are spread across
+2 pages (14 rows per page)
+
+| **Page #** | **Rows** | **Offset Index** | **Range of Bytes** |
+| ---------- | -------- | ---------------- | ------------------ |
+| 0          | 0 to 13  | 0 to 13          | 0 to 4095          |
+| 1          | 14 to 27 | 0 to 13          | 4096 to 8191       |
+| 2          | 28 to 41 | 0 to 13          | 8192 to 12287      |
+| 3          | 42 to 55 | 0 to 13          | 12288 to 16383     |
+| 4          | 56 to 69 | 0 to 13          | 16384 to 20479     |
+
+Each page can hold exactly `ROWS_PER_PAGE` amount of rows, the offset always starts at 0 and goes up to `ROWS_PER_PAGE - 1`.
+
+The offset for each row is essentially an "index" we use to locate the row within the page.
+
+**Example:** `row_position = row_offset x ROW_SIZE = 2 x 32 = 64 bytes`
+
 #### Takeaways | TIL
 
 ---
