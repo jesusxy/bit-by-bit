@@ -167,11 +167,25 @@ The offset for each row is essentially an "index" we use to locate the row withi
 
 **Example:** `row_position = row_offset x ROW_SIZE = 2 x 32 = 64 bytes`
 
-### Part VI
+### Part VII
 
 ---
 
-In this section we will be creating a `Cursor` object which represents the location in the table.
+**B-Trees** are used to store `Indexes` in SQLite.
+**B+ Trees** are used to store `Tables` in SQLite.
+
+Our current table format where we store only rows (no metadata) is space efficient.
+Insertion is fast because we append to the **end** of the table.
+Finding a particular row is time consuming because we have to scan the **entire** table.
+
+If we stored the table as an array and kept it sorted by _id_ we could perform `Binary Search` to find
+and id. Insertion would be slow though because we would have move and reorganize rows to make space.
+
+| Operation     | Unsorted Array | Sorted Array | Tree of Nodes |
+| ------------- | -------------- | ------------ | ------------- |
+| Insertion     | O(1)           | O(n)         | O(log(n))     |
+| Deletion      | O(n)           | O(n)         | O(log(n))     |
+| Lookup by Key | O(n)           | O(log(n))    | O(log(n))     |
 
 #### Takeaways | TIL
 
