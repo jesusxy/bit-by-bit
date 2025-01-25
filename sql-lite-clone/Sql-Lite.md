@@ -167,6 +167,12 @@ The offset for each row is essentially an "index" we use to locate the row withi
 
 **Example:** `row_position = row_offset x ROW_SIZE = 2 x 32 = 64 bytes`
 
+### Part VI
+
+---
+
+In this section we will be creating a `Cursor` object which represents the location in the table.
+
 #### Takeaways | TIL
 
 ---
