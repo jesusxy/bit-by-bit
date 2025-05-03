@@ -1,10 +1,6 @@
 ## Simple Memory Allocator
 
----
-
 ### Memory Layout of a Program
-
----
 
 Split into 5 different sections
 
