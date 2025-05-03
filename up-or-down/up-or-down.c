@@ -20,12 +20,7 @@ int main()
 }
 
 // recursive approach
-bool upordown2(int *other) { 
+bool upordown(int *other) {
     int x;
-
-    if(!other) {
-        return upordown2(&x);
-    } else {
-        return &x > other;
-    }
+    return other ? &x > other : upordown(&x);
 }
