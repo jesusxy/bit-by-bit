@@ -97,7 +97,7 @@ This frees a block by subtracting the total size from the heap break.
 
 ---
 
-## 📚 What I Learned
+### 📚 What I Learned
 
 - When allocating memory using these functions we are directly interacting with the memory _heap_.
 - `Pointer Arithmetic` I was unaware you can move pointers by the size of a struct (i.e `(header_t*) block)`)
