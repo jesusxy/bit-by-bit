@@ -19,18 +19,13 @@ int main()
     return 0;
 }
 
-/****
- * Alternative approach
- *
- * bool upordown(int *other) {
- *  int x;
- *
- *  if(!other) {
- *      return upordown(&x);
- *  } else {
- *      return &x > other;
- *  }
- * }
- *
- *
- */
+// recursive approach
+bool upordown2(int *other) { 
+    int x;
+
+    if(!other) {
+        return upordown2(&x);
+    } else {
+        return &x > other;
+    }
+}
