@@ -7,7 +7,7 @@ Each project investigates a foundational question in (systems) programming, for 
 - How does the call stack behave at runtime?
 - How might a SQL engine or JavaScript runtime be implemented from first principles?
 
-Inspired by the book `But How Do It Know?`, these projects are learning artifacts, not production tools, crafted to deepen my understanding of how computers actually work, one bit at a time.
+Inspired by the book `But How Do It Know?`, these projects are learning artifacts not production tools, crafted to deepen my understanding of how computers actually work, one bit at a time.
 
 ### 📂 Projects
 
