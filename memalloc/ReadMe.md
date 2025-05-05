@@ -58,7 +58,7 @@ struct header {
 - We align each block to 16 bytes for safety and performance using a `union`
 - Blocks are stored in a **linked list** for traversal and reallocation
 
-By using a `header struct` we can store this information. When a program requests new memory we calculcate `total_size = header_size + size` and pass this `total_size` to the `sbrk()` call.
+We can use a  `header struct` to store this information. When a program requests new memory we calculcate `total_size = header_size + size` and pass this `total_size` to the `sbrk()` call.
 
 Now the memory blocks will look like:
 
