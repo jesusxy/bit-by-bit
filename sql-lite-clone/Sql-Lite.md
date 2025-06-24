@@ -1,10 +1,6 @@
 ## SQLite Clone - C
 
----
-
 ### Part I
-
----
 
 `SQL Query` goes through the following components.
 On the **front-end**
@@ -22,9 +18,9 @@ The **backend** consists of the following components:
 - pager
 - os interface
 
-#### Freeing Memory
-
 ---
+
+#### Freeing Memory
 
 In our `close_input_buffer()` we call free twice. We have to explicitely free both the `buffer` and the `InputBuffer` struct.
 They are two separate allocations of memory. The `buffer` field is a **pointer** to memory that is dynamically allocated. This is in a different location and address than the `InputBuffer` struct.
@@ -39,18 +35,18 @@ For composite structures we want to
 1. free nested allocations first
 2. free the struct itself
 
-### Part II
-
 ---
+
+### Part II
 
 Objective of this part is to create a compiler that parses the input string and outputs `bytecode`. This will then get passed to our VM to be processed.
 
 - C does not support exceptions which is why we use `enum` result codes
 - The compiler will complain if a switch statement does not handle a member of the enum, giving us confidence that all results of a function were handled
 
-### Part III
-
 ---
+
+### Part III
 
 For now, this db will:
 
@@ -96,9 +92,9 @@ It will be stored as: `['A', 'l', 'i', 'c', 'e', '\0', ...]`
 
 "alice@example.com" would be stored as `['a', 'l', 'i', 'c', 'e', '@', 'e', 'x', 'a', 'm', 'p', 'l', 'e', '.', 'c', 'o', 'm', '\0', ...]`
 
-### Part V
-
 ---
+
+### Part V
 
 Peristing records to memory will be done by the **Pager**.
 
@@ -124,7 +120,7 @@ Page 3: 12288 - 16383
 
 ```
 
-##### Loading DB
+### Loading DB
 
 When we load the database file we need to know how many **rows** are already present in the file. To do this we have to `divide` the total file size **(file_length)** by the
 size of each row **(ROW_SIZE)**
@@ -167,9 +163,9 @@ The offset for each row is essentially an "index" we use to locate the row withi
 
 **Example:** `row_position = row_offset x ROW_SIZE = 2 x 32 = 64 bytes`
 
-### Part VII
-
 ---
+
+### Part VII
 
 **B-Trees** are used to store `Indexes` in SQLite.
 **B+ Trees** are used to store `Tables` in SQLite.
