@@ -33,7 +33,7 @@ func newCreateCmd() *cli.Command {
 			bundle := cmd.String("bundle")
 			pid := cmd.String("pid-file")
 
-			fmt.Printf("Creating container { Id: %s, bundle: %s, pid: %s\n", id, bundle, pid)
+			fmt.Printf("Creating container {id:%s, bundle:%s, pidFile: %s}\n", id, bundle, pid)
 			return nil
 		},
 	}
