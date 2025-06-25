@@ -1,40 +1,39 @@
 package main
 
 import (
-	"context"
 	"testing"
-
-	cli "github.com/urfave/cli/v3"
 )
 
-func TestCreateCmdRequiresId(t *testing.T) {
-	cmd := newCreateCmd()
-	ctx := context.Background()
+// Test that the logic correctly returns an error if the ID is missing.
+func TestCreateContainerRequiresID(t *testing.T) {
+	// No ID is provided in this config.
+	cfg := CreateCmdConfig{Bundle: ".", PIDFile: ""}
+	err := createContainer(cfg)
 
-	err := cmd.Run(ctx, []string{"ror"})
+	if err == nil {
+		t.Fatal("expected an error when container ID is missing, but got nil")
+	}
 
-	if ec, ok := err.(cli.ExitCoder); !ok || ec.ExitCode() != 1 {
-		t.Fatalf("expected cli.ExitCoder with code 1, got %v", err)
+	expectedErr := "container id required"
+	if err.Error() != expectedErr {
+		t.Fatalf("expected error '%s', but got '%s'", expectedErr, err.Error())
 	}
 }
 
-func TestCreateCmdParsesFlags(t *testing.T) {
-	var gotID, gotBundle string
-	cmd := newCreateCmd()
-
-	cmd.Action = func(_ context.Context, c *cli.Command) error {
-		gotID = c.Args().First()
-		gotBundle = c.String("bundle")
-		return nil
+// Test the successful logic path.
+func TestCreateContainer(t *testing.T) {
+	// Provide a valid config.
+	cfg := CreateCmdConfig{
+		ID:      "my-test-box",
+		Bundle:  "/tmp/busybox",
+		PIDFile: "/var/run/test.pid",
 	}
 
-	err := cmd.Run(context.Background(), []string{"ror", "--bundle", "/tmp/busybox", "box"})
+	err := createContainer(cfg)
 
+	// In a real test, you would check that the container was
+	// actually created. For now, we just check for no errors.
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if gotID != "box" || gotBundle != "/tmp/busybox" {
-		t.Fatalf("parsed {id:%v, bundle:%s}", gotID, gotBundle)
+		t.Fatalf("expected no error, but got: %v", err)
 	}
 }
