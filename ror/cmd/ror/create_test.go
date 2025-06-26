@@ -23,6 +23,7 @@ func TestCreateContainerRequiresID(t *testing.T) {
 }
 
 func TestCreateContainerSuccess(t *testing.T) {
+	// --- ARRANGE / SETUP ---
 	tempDir := t.TempDir()
 
 	bundleDir := filepath.Join(tempDir, "my-bundle")
@@ -42,10 +43,12 @@ func TestCreateContainerSuccess(t *testing.T) {
 		BasePath: stateDir,
 	}
 
+	// --- ACT / EXECUTION ---
 	if err := createContainer(cfg); err != nil {
 		t.Fatalf("createContainer failed: %v", err)
 	}
 
+	// --- ASSERT / VERIFICATION ---
 	expectedStatePath := filepath.Join(stateDir, cfg.ID)
 	t.Run("it creates the container state directory", func(t *testing.T) {
 		if _, err := os.Stat(expectedStatePath); os.IsNotExist(err) {
