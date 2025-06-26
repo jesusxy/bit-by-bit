@@ -13,9 +13,10 @@ import (
 )
 
 type CreateCmdConfig struct {
-	ID      string
-	Bundle  string
-	PIDFile string
+	ID       string
+	Bundle   string
+	PIDFile  string
+	BasePath string
 }
 
 func newCreateCmd() *cli.Command {
@@ -41,6 +42,7 @@ func newCreateCmd() *cli.Command {
 		},
 		Action: func(c context.Context, cmd *cli.Command) error {
 			cfg.ID = cmd.Args().First()
+			cfg.BasePath = "./run/ror"
 
 			return createContainer(cfg)
 		},
@@ -52,8 +54,7 @@ func createContainer(cfg CreateCmdConfig) error {
 		return fmt.Errorf("container id required")
 	}
 
-	basePath := "./run/ror"
-	containerStatePath := filepath.Join(basePath, cfg.ID)
+	containerStatePath := filepath.Join(cfg.BasePath, cfg.ID)
 	bundleConfigPath := filepath.Join(cfg.Bundle, "config.json")
 
 	if err := os.MkdirAll(containerStatePath, 0755); err != nil {

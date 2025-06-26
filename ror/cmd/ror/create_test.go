@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -20,20 +22,43 @@ func TestCreateContainerRequiresID(t *testing.T) {
 	}
 }
 
-// Test the successful logic path.
-func TestCreateContainer(t *testing.T) {
-	// Provide a valid config.
-	cfg := CreateCmdConfig{
-		ID:      "my-test-box",
-		Bundle:  "/tmp/busybox",
-		PIDFile: "/var/run/test.pid",
+func TestCreateContainerSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+
+	bundleDir := filepath.Join(tempDir, "my-bundle")
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create fake bundle dir: %v", err)
 	}
 
-	err := createContainer(cfg)
+	fakeConfig := `{"ociVersion": "1.0.0"}`
+	if err := os.WriteFile(filepath.Join(bundleDir, "config.json"), []byte(fakeConfig), 0644); err != nil {
+		t.Fatalf("failed to write fake config.json: %v", err)
+	}
 
-	// In a real test, you would check that the container was
-	// actually created. For now, we just check for no errors.
+	stateDir := filepath.Join(tempDir, "ror-state")
+	cfg := CreateCmdConfig{
+		ID:       "test-container-1",
+		Bundle:   bundleDir,
+		BasePath: stateDir,
+	}
+
+	if err := createContainer(cfg); err != nil {
+		t.Fatalf("createContainer failed: %v", err)
+	}
+
+	expectedStatePath := filepath.Join(stateDir, cfg.ID)
+	if _, err := os.Stat(expectedStatePath); os.IsNotExist(err) {
+		t.Fatalf("expected state directory to be created at %s, but it was not", expectedStatePath)
+	}
+
+	copiedConfigPath := filepath.Join(expectedStatePath, "config.json")
+	content, err := os.ReadFile(copiedConfigPath)
+
 	if err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
+		t.Fatalf("failed to read copied config.json: %v", err)
+	}
+
+	if string(content) != fakeConfig {
+		t.Fatalf("config.json content mismatch. got %q, want %q", string(content), fakeConfig)
 	}
 }
