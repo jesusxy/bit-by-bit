@@ -47,18 +47,21 @@ func TestCreateContainerSuccess(t *testing.T) {
 	}
 
 	expectedStatePath := filepath.Join(stateDir, cfg.ID)
-	if _, err := os.Stat(expectedStatePath); os.IsNotExist(err) {
-		t.Fatalf("expected state directory to be created at %s, but it was not", expectedStatePath)
-	}
+	t.Run("it creates the container state directory", func(t *testing.T) {
+		if _, err := os.Stat(expectedStatePath); os.IsNotExist(err) {
+			t.Errorf("expected state directory to be created at %s, but it was not", expectedStatePath)
+		}
+	})
 
-	copiedConfigPath := filepath.Join(expectedStatePath, "config.json")
-	content, err := os.ReadFile(copiedConfigPath)
+	t.Run("it copies the config.json to the state directory", func(t *testing.T) {
+		copiedConfigPath := filepath.Join(expectedStatePath, "config.json")
+		content, err := os.ReadFile(copiedConfigPath)
+		if err != nil {
+			t.Fatalf("failed to read copied config.json for verification: %v", err)
+		}
 
-	if err != nil {
-		t.Fatalf("failed to read copied config.json: %v", err)
-	}
-
-	if string(content) != fakeConfig {
-		t.Fatalf("config.json content mismatch. got %q, want %q", string(content), fakeConfig)
-	}
+		if string(content) != fakeConfig {
+			t.Errorf("config.json content mismatch.\n  got:  %q\n  want: %q", string(content), fakeConfig)
+		}
+	})
 }
