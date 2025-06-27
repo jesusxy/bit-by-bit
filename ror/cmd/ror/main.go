@@ -10,6 +10,8 @@ import (
 
 var Version = "dev"
 
+const defaultBasePath = "./run/ror"
+
 func main() {
 	root := &cli.Command{
 		Name:    "ror",

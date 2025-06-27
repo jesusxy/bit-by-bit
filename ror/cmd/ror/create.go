@@ -35,8 +35,7 @@ func newCreateCmd() *cli.Command {
 		},
 		Action: func(c context.Context, cmd *cli.Command) error {
 			cfg.ID = cmd.Args().First()
-			cfg.BasePath = "./run/ror"
-
+			cfg.BasePath = defaultBasePath
 			return createContainer(cfg)
 		},
 	}
