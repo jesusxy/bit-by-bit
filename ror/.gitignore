@@ -34,3 +34,8 @@ go.work.sum
 # Ignore generated OCI artifacts for local testing
 /busybox-bundle/
 /busybox-oci/
+
+# Ignore runtime state directory
+/run/
+
+TODO.txt
