@@ -18,8 +18,13 @@ func newStartCmd() *cli.Command {
 			}
 
 			fmt.Printf("Running container %s\n", cmd.Args().First())
+			id := cmd.Args().First()
 
-			return nil
+			return startContainer(id)
 		},
 	}
+}
+
+func startContainer(id string) error {
+	return nil
 }
