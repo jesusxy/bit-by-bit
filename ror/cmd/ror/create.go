@@ -12,15 +12,8 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-type CreateCmdConfig struct {
-	ID       string
-	Bundle   string
-	PIDFile  string
-	BasePath string
-}
-
 func newCreateCmd() *cli.Command {
-	var cfg CreateCmdConfig
+	var cfg ContainerConfig
 
 	return &cli.Command{
 		Name:      "create",
@@ -49,7 +42,7 @@ func newCreateCmd() *cli.Command {
 	}
 }
 
-func createContainer(cfg CreateCmdConfig) error {
+func createContainer(cfg ContainerConfig) error {
 	if cfg.ID == "" {
 		return fmt.Errorf("container id required")
 	}
