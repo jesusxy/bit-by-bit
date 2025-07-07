@@ -17,7 +17,7 @@ func newStartCmd() *cli.Command {
 				return cli.Exit("container id required", 1)
 			}
 
-			fmt.Printf("Running container %s\n", cmd.Args().First())
+			fmt.Printf("[Starting Container::] %s\n", cmd.Args().First())
 			id := cmd.Args().First()
 
 			return startContainer(id)
