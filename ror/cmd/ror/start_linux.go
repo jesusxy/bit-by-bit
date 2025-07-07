@@ -39,8 +39,12 @@ func startContainer(id string) error {
 
 	// --- prepare the command to run ---
 
-	log.Printf("[RUNNING] %v\n", os.Args[2:])
-	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	command := spec.Process.Args[0]
+	args := spec.Process.Args[1:]
+
+	log.Printf("[RUNNING] %v with args %v\n", command, args)
+
+	cmd := exec.Command(command, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
