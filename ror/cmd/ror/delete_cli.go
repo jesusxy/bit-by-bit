@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
 
-func newDeleteCmd() *cli.Command {
+func newDeleteCmd(r *runner.Runner) *cli.Command {
 	return &cli.Command{
 		Name:      "delete",
 		Usage:     "Delete container state",
@@ -17,8 +18,9 @@ func newDeleteCmd() *cli.Command {
 				return cli.Exit("container id required", 1)
 			}
 
-			fmt.Printf("Deleting container %s\n", cmd.Args().First())
-			return nil
+			id := cmd.Args().First()
+			fmt.Printf("Deleting container %s\n", id)
+			return r.DeleteContainer(id)
 		},
 	}
 }

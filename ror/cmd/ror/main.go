@@ -26,7 +26,7 @@ func main() {
 		Commands: []*cli.Command{
 			newCreateCmd(runner),
 			newStartCmd(runner),
-			newDeleteCmd(),
+			newDeleteCmd(runner),
 			newInitCmd(runner),
 		},
 	}
