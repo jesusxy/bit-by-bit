@@ -15,7 +15,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func initContainer(id string) error {
+func (r *Runner) InitContainer(id string) error {
 	containerStatePath := filepath.Join(defaultBasePath, id)
 	// Load the blueprint (config.json)
 	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))

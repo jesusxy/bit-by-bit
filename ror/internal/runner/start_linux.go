@@ -11,9 +11,9 @@ import (
 	"syscall"
 )
 
-func startContainer(id string) error {
+func (r *Runner) StartContainer(id string) error {
 	// locate the container state via id
-	containerState := filepath.Join(defaultBasePath, id)
+	containerState := filepath.Join(r.BasePath, id)
 
 	if _, err := os.Stat(containerState); os.IsNotExist(err) {
 		// If we get an "IsNotExist" error, it means the directory isn't there.

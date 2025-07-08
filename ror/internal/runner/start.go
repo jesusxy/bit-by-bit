@@ -4,6 +4,6 @@ package runner
 
 import "fmt"
 
-func startContainer(id string) error {
+func (r *Runner) StartContainer(id string) error {
 	return fmt.Errorf("cannot start container on non-linux OS")
 }

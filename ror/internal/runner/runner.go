@@ -5,6 +5,8 @@ type Runner struct {
 	BasePath string
 }
 
-func New() *Runner {
-	return &Runner{}
+func New(basepath string) (*Runner, error) {
+	return &Runner{
+		BasePath: basepath,
+	}, nil
 }

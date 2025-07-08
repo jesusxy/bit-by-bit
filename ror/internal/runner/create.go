@@ -7,10 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (r *Runner) CreateContainer(cfg ContainerConfig) error {
+func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 	if cfg.ID == "" {
 		return fmt.Errorf("container id required")
 	}
