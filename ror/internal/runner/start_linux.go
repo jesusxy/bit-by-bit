@@ -13,9 +13,9 @@ import (
 
 func (r *Runner) StartContainer(id string) error {
 	// locate the container state via id
-	containerState := filepath.Join(r.BasePath, id)
+	containerStatePath := filepath.Join(r.BasePath, id)
 
-	if _, err := os.Stat(containerState); os.IsNotExist(err) {
+	if _, err := os.Stat(containerStatePath); os.IsNotExist(err) {
 		// If we get an "IsNotExist" error, it means the directory isn't there.
 		return fmt.Errorf("container with id '%s' does not exist", id)
 	}
@@ -38,7 +38,7 @@ func (r *Runner) StartContainer(id string) error {
 	}
 
 	pid := cmd.Process.Pid
-	pidFilePath := filepath.Join(containerState, "pid")
+	pidFilePath := filepath.Join(containerStatePath, "pid")
 
 	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
 		return fmt.Errorf("failed to write pid file: %w", err)
