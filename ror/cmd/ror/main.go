@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
 
@@ -13,15 +14,20 @@ var Version = "dev"
 const defaultBasePath = "./run/ror"
 
 func main() {
+	runner, err := runner.New(defaultBasePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	root := &cli.Command{
 		Name:    "ror",
 		Usage:   "Rootless OCI runner",
 		Version: Version,
 		Commands: []*cli.Command{
-			newCreateCmd(),
-			newStartCmd(),
+			newCreateCmd(runner),
+			newStartCmd(runner),
 			newDeleteCmd(),
-			newInitCmd(),
+			newInitCmd(runner),
 		},
 	}
 

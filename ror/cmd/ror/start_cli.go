@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
 
-func newStartCmd() *cli.Command {
+func newStartCmd(r *runner.Runner) *cli.Command {
 	return &cli.Command{
 		Name:      "start",
 		Usage:     "Start a created container",
@@ -20,7 +21,7 @@ func newStartCmd() *cli.Command {
 			fmt.Printf("[Starting Container::] %s\n", cmd.Args().First())
 			id := cmd.Args().First()
 
-			return startContainer(id)
+			return r.StartContainer(id)
 		},
 	}
 }

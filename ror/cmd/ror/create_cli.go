@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 
-	"github.com/jesuskeys/ror/internal/runner"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/types"
 	"github.com/urfave/cli/v3"
 )
 
-func newCreateCmd() *cli.Command {
-	var cfg ContainerConfig
+func newCreateCmd(r *runner.Runner) *cli.Command {
+	var cfg types.ContainerConfig
 
 	return &cli.Command{
 		Name:      "create",
@@ -31,7 +32,7 @@ func newCreateCmd() *cli.Command {
 		Action: func(c context.Context, cmd *cli.Command) error {
 			cfg.ID = cmd.Args().First()
 			cfg.BasePath = defaultBasePath
-			return runner.CreateContainer(cfg)
+			return r.CreateContainer(cfg)
 		},
 	}
 }

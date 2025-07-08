@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
 
-func newInitCmd() *cli.Command {
+func newInitCmd(r *runner.Runner) *cli.Command {
 	return &cli.Command{
 		Name:   "init",
 		Usage:  "Internal command to initialize a container (DO NOT CALL DIRECTLY)",
@@ -18,7 +19,7 @@ func newInitCmd() *cli.Command {
 			}
 			id := cmd.Args().First()
 
-			return initContainer(id)
+			return r.InitContainer(id)
 		},
 	}
 }
