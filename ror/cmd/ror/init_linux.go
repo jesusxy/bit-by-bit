@@ -35,7 +35,9 @@ func initContainer(id string) error {
 		return fmt.Errorf("failed to set hostname: %w", err)
 	}
 
-	if err := pivotRoot(spec.Root.Path); err != nil {
+	absRootFsPath := "/mnt/ror/busybox-bundle" + "/" + spec.Root.Path
+
+	if err := pivotRoot(absRootFsPath); err != nil {
 		return fmt.Errorf("failed to pivot root: %w", err)
 	}
 
@@ -86,12 +88,13 @@ func pivotRoot(newRoot string) error {
 
 func mountFs(mounts []specs.Mount) error {
 	optionsMap := map[string]uintptr{
-		"ro":     syscall.MS_RDONLY,
-		"nosuid": syscall.MS_NOSUID,
-		"noexec": syscall.MS_NOEXEC,
-		"nodev":  syscall.MS_NODEV,
-		"rbind":  syscall.MS_BIND | syscall.MS_REC,
-		"bind":   syscall.MS_BIND,
+		"ro":          syscall.MS_RDONLY,
+		"nosuid":      syscall.MS_NOSUID,
+		"noexec":      syscall.MS_NOEXEC,
+		"nodev":       syscall.MS_NODEV,
+		"rbind":       syscall.MS_BIND | syscall.MS_REC,
+		"bind":        syscall.MS_BIND,
+		"strictatime": syscall.MS_STRICTATIME,
 	}
 
 	for _, mount := range mounts {
