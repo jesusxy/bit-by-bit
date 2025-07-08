@@ -33,5 +33,16 @@ func (r *Runner) StartContainer(id string) error {
 		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
 	}
 
-	return cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start container init process: %w", err)
+	}
+
+	pid := cmd.Process.Pid
+	pidFilePath := filepath.Join(containerState, "pid")
+
+	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+		return fmt.Errorf("failed to write pid file: %w", err)
+	}
+
+	return cmd.Wait()
 }
