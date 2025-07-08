@@ -3,15 +3,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
-
-	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func startContainer(id string) error {
@@ -23,37 +20,18 @@ func startContainer(id string) error {
 		return fmt.Errorf("container with id '%s' does not exist", id)
 	}
 
-	// Load the blueprint (config.json)
-	configJSON, err := os.ReadFile(filepath.Join(containerState, "config.json"))
-	if err != nil {
-		return fmt.Errorf("failed to read bundle config: %w", err)
-	}
-
-	// unmarshall config into spec struct
-	var spec specs.Spec
-	if err := json.Unmarshal(configJSON, &spec); err != nil {
-		return fmt.Errorf("failed to unmarshall bundle into OCI spec: %w", err)
-	}
-
-	log.Printf("Successfully loaded spec for container '%s'. Starting...", id)
-
 	// --- prepare the command to run ---
 
-	command := spec.Process.Args[0]
-	args := spec.Process.Args[1:]
+	log.Printf("[RUNNING] contianer: %v\n", id)
 
-	log.Printf("[RUNNING] %v with args %v\n", command, args)
-
-	cmd := exec.Command(command, args...)
+	cmd := exec.Command("/proc/self/exe", "init", id)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
 	}
 
-	cmd.Run()
-
-	return nil
+	return cmd.Run()
 }
