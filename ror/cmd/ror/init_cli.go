@@ -1,10 +1,24 @@
-//go:build !linux
-
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
 
-// This is the dummy function for non-Linux systems.
-func initContainer(id string) error {
-	return fmt.Errorf("init command is for internal use on linux only")
+	"github.com/urfave/cli/v3"
+)
+
+func newInitCmd() *cli.Command {
+	return &cli.Command{
+		Name:   "init",
+		Usage:  "Internal command to initialize a container (DO NOT CALL DIRECTLY)",
+		Hidden: true,
+		Action: func(c context.Context, cmd *cli.Command) error {
+			if cmd.Args().Len() < 1 {
+				return fmt.Errorf("container id not provided for INIT")
+			}
+			id := cmd.Args().First()
+
+			return initContainer(id)
+		},
+	}
 }
