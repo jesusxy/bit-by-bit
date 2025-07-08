@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -36,27 +38,18 @@ func initContainer(id string) error {
 	if err := pivotRoot(spec.Root.Path); err != nil {
 		return fmt.Errorf("failed to pivot root: %w", err)
 	}
-	syscall.Mount(spec.Root.Path, spec.Root.Path, "bind", syscall.MS_BIND|syscall.MS_REC, "")
-	// what is the old root?
-	syscall.Mkdir("./rootfs/.pivot_root", 0755)
 
-	syscall.PivotRoot(spec.Root.Path, "./rootfs/.pivot_root")
-	os.Chdir("/")
-
-	// how do I unmount the old root?
-	syscall.Unmount("/.pivot_root", syscall.MNT_DETACH)
-
-	for _, mount := range spec.Mounts {
-		mountTarget := filepath.Join(spec.Root.Path, mount.Destination)
-		mountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-
-		syscall.Mount(mount.Source, mountTarget, mount.Type, uintptr(mountFlags), "0")
+	if err := mountFs(spec.Mounts); err != nil {
+		return fmt.Errorf("failed to mount special filesystems: %w", err)
 	}
 
-	// execute sh command here?
-	// run command here?
+	command, err := exec.LookPath(spec.Process.Args[0])
+	if err != nil {
+		return fmt.Errorf("command '%s' not found in PATH: %w", spec.Process.Args[0], err)
+	}
 
-	return nil
+	log.Printf("Exec-ing command: %s with args %v and env %v", command, spec.Process.Args, spec.Process.Env)
+	return syscall.Exec(command, spec.Process.Args, spec.Process.Env)
 }
 
 func pivotRoot(newRoot string) error {
@@ -89,4 +82,46 @@ func pivotRoot(newRoot string) error {
 	}
 
 	return os.RemoveAll(oldRoot)
+}
+
+func mountFs(mounts []specs.Mount) error {
+	optionsMap := map[string]uintptr{
+		"ro":     syscall.MS_RDONLY,
+		"nosuid": syscall.MS_NOSUID,
+		"noexec": syscall.MS_NOEXEC,
+		"nodev":  syscall.MS_NODEV,
+		"rbind":  syscall.MS_BIND | syscall.MS_REC,
+		"bind":   syscall.MS_BIND,
+	}
+
+	for _, mount := range mounts {
+		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
+			return fmt.Errorf("failed to create mount dest %s:%w", mount.Destination, err)
+		}
+
+		var mountFlags uintptr
+		var dataOptions []string
+
+		for _, opt := range mount.Options {
+			if flag, exists := optionsMap[opt]; exists {
+				mountFlags |= flag
+			} else {
+				dataOptions = append(dataOptions, opt)
+			}
+		}
+
+		data := strings.Join(dataOptions, ",")
+		log.Printf("Mounting %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
+
+		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
+			if mount.Destination == "/sys" {
+				log.Printf("optional /sys mount failed: %v", err)
+				continue
+			}
+
+			return fmt.Errorf("fialed to mount -> %s:%w", mount.Destination, err)
+		}
+	}
+
+	return nil
 }
