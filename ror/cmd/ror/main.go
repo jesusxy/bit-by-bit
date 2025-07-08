@@ -21,6 +21,7 @@ func main() {
 			newCreateCmd(),
 			newStartCmd(),
 			newDeleteCmd(),
+			newInitCmd(),
 		},
 	}
 
