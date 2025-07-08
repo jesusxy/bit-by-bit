@@ -16,7 +16,7 @@ import (
 )
 
 func (r *Runner) InitContainer(id string) error {
-	containerStatePath := filepath.Join(defaultBasePath, id)
+	containerStatePath := filepath.Join(r.BasePath, id)
 	// Load the blueprint (config.json)
 	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
 	if err != nil {
