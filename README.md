@@ -16,6 +16,6 @@ Inspired by the book `But How Do It Know?`, these projects are learning artifact
 | `memalloc`     | A minimalist malloc/free-style allocator in C   |
 | `up-down`      | Detects stack growth direction at runtime       |
 | `tiny-sql`     | In-memory SQL-like query engine (WIP)           |
-| `ror`          | A minimal OCI-compliant container runtime built from scratch in Go |
+| `ror`          | A minimal OCI-compliant container runtime built from scratch in Go (WIP)|
 | `js-runtime-c` | Exploring interpreter fundamentals (planned)    |
 | `debugger`     | Lightweight debugger with breakpoints (planned) |
