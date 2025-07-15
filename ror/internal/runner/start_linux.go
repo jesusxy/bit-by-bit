@@ -53,6 +53,21 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("failed to parse subgid mappings: %w", err)
 	}
 
+	// --- create cgroup sandbox --- //
+	cgroupPath := filepath.Join("/sys/fs/cgroup/ror/", "ror", id)
+	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
+		return fmt.Errorf("failed to create cgroup directory %w", err)
+	}
+
+	if spec.Linux.Resources.Memory != nil && spec.Linux.Resources.Memory.Limit != nil && *spec.Linux.Resources.Memory.Limit > 0 {
+		limit := *spec.Linux.Resources.Memory.Limit
+		memoryLimitPath := filepath.Join(cgroupPath, "memory.max")
+
+		if err := os.WriteFile(memoryLimitPath, []byte(strconv.FormatInt(limit, 10)), 0644); err != nil {
+			return fmt.Errorf("failed to write memory limit to cgroup: %w", err)
+		}
+	}
+
 	cmd := exec.Command("/proc/self/exe", "init", id)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -117,6 +132,13 @@ func findSubIDRange(username, filepath string) (start, count int, err error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		// linux file format username:start_uid:uid_count
+		/** examples:
+			root:231072:512
+			user1:100000:65536
+			user2:165536:65536
+			user3:200000:1000
+		**/
 		parts := strings.Split(line, ":")
 
 		if len(parts) == 3 && parts[0] == username {
