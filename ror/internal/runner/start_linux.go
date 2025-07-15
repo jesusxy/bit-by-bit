@@ -54,7 +54,7 @@ func (r *Runner) StartContainer(id string) error {
 	}
 
 	// --- create cgroup sandbox --- //
-	cgroupPath := filepath.Join("/sys/fs/cgroup/ror/", "ror", id)
+	cgroupPath := filepath.Join("/sys/fs/cgroup", "ror", id)
 	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
 		return fmt.Errorf("failed to create cgroup directory %w", err)
 	}
@@ -88,6 +88,11 @@ func (r *Runner) StartContainer(id string) error {
 
 	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
 		return fmt.Errorf("failed to write pid file: %w", err)
+	}
+
+	cgroupProcPath := filepath.Join(cgroupPath, "cgroup.procs")
+	if err := os.WriteFile(cgroupProcPath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+		return fmt.Errorf("failed to write pid to cgroup.procs: %w", err)
 	}
 
 	return cmd.Wait()
