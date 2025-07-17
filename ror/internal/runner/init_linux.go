@@ -35,7 +35,12 @@ func (r *Runner) InitContainer(id string) error {
 		return fmt.Errorf("failed to set hostname: %w", err)
 	}
 
-	absRootFsPath := "/mnt/ror/busybox-bundle" + "/" + spec.Root.Path
+	bundlePathBytes, err := os.ReadFile(filepath.Join(containerStatePath, "bundle_path.txt"))
+	if err != nil {
+		return fmt.Errorf("[INIT Container] failed to read bundle path from state: %w", err)
+	}
+	bundlePath := string(bundlePathBytes)
+	absRootFsPath := filepath.Join(bundlePath, spec.Root.Path)
 
 	if err := pivotRoot(absRootFsPath); err != nil {
 		return fmt.Errorf("failed to pivot root: %w", err)
