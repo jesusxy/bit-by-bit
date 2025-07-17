@@ -19,15 +19,16 @@ import (
 )
 
 func (r *Runner) StartContainer(id string) error {
-	// locate the container state via id
+	// ---------------------------------------------------------------------
+	// 1. Locate state & parse OCI spec
+	// ---------------------------------------------------------------------
+
 	containerStatePath := filepath.Join(r.BasePath, id)
 
 	if _, err := os.Stat(containerStatePath); os.IsNotExist(err) {
 		// If we get an "IsNotExist" error, it means the directory isn't there.
 		return fmt.Errorf("container with id '%s' does not exist", id)
 	}
-
-	// --- prepare the command to run ---
 
 	log.Printf("[RUNNING] contianer: %v\n", id)
 
@@ -36,10 +37,13 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("unable to get current user: %w", err)
 	}
 
-	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+	cfgBytes, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+	if err != nil {
+		return fmt.Errorf("failed to read config.json: %w", err)
+	}
 
 	var spec specs.Spec
-	if err := json.Unmarshal(configJSON, &spec); err != nil {
+	if err := json.Unmarshal(cfgBytes, &spec); err != nil {
 		return fmt.Errorf("failed to unmarshall bundle into OCI spec: %w", err)
 	}
 
@@ -53,20 +57,39 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("failed to parse subgid mappings: %w", err)
 	}
 
-	// --- create cgroup sandbox --- //
-	cgroupPath := filepath.Join("/sys/fs/cgroup", "ror", id)
+	// ---------------------------------------------------------------------
+	// 2. Cgroup setup (rootless‑safe)
+	// ---------------------------------------------------------------------
+
+	selfCG, err := selfCgroupV2()
+	if err != nil {
+		return fmt.Errorf("[START Container] could not detect self cgroup: %w", err)
+	}
+
+	rorParent := filepath.Join(selfCG, "ror")
+	if err := os.MkdirAll(rorParent, 0755); err != nil {
+		return fmt.Errorf("[Start Container] failed to mkdir ror parent: %w", err)
+	}
+
+	if err := enableControllers(rorParent); err != nil {
+		return fmt.Errorf("[START Container] failed to enable controllers: %w", err)
+	}
+
+	cgroupPath := filepath.Join(rorParent, id)
 	if err := os.MkdirAll(cgroupPath, 0755); err != nil {
 		return fmt.Errorf("failed to create cgroup directory %w", err)
 	}
 
-	if spec.Linux.Resources.Memory != nil && spec.Linux.Resources.Memory.Limit != nil && *spec.Linux.Resources.Memory.Limit > 0 {
-		limit := *spec.Linux.Resources.Memory.Limit
-		memoryLimitPath := filepath.Join(cgroupPath, "memory.max")
-
-		if err := os.WriteFile(memoryLimitPath, []byte(strconv.FormatInt(limit, 10)), 0644); err != nil {
-			return fmt.Errorf("failed to write memory limit to cgroup: %w", err)
+	if mem := spec.Linux.Resources.Memory; mem != nil && mem.Limit != nil && *mem.Limit > 0 {
+		if err := writeFile(filepath.Join(cgroupPath, "memory.max"),
+			strconv.FormatInt(*mem.Limit, 10)); err != nil {
+			return fmt.Errorf("set memory limit: %w", err)
 		}
 	}
+
+	// ---------------------------------------------------------------------
+	// 3. Fork/clone into namespaces
+	// ---------------------------------------------------------------------
 
 	cmd := exec.Command("/proc/self/exe", "init", id)
 	cmd.Stdin = os.Stdin
@@ -74,25 +97,19 @@ func (r *Runner) StartContainer(id string) error {
 	cmd.Stderr = os.Stderr
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:  syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWUSER,
-		UidMappings: uidMappings,
-		GidMappings: gidMappings,
+		Cloneflags:                 syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWUSER | syscall.CLONE_NEWIPC,
+		GidMappingsEnableSetgroups: false,
+		UidMappings:                uidMappings,
+		GidMappings:                gidMappings,
+		Credential:                 &syscall.Credential{Uid: 0, Gid: 0},
 	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start container init process: %w", err)
 	}
 
-	pid := cmd.Process.Pid
-	pidFilePath := filepath.Join(containerStatePath, "pid")
-
-	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
-		return fmt.Errorf("failed to write pid file: %w", err)
-	}
-
-	cgroupProcPath := filepath.Join(cgroupPath, "cgroup.procs")
-	if err := os.WriteFile(cgroupProcPath, []byte(strconv.Itoa(pid)), 0644); err != nil {
-		return fmt.Errorf("failed to write pid to cgroup.procs: %w", err)
+	if err := addPid(cgroupPath, cmd.Process.Pid); err != nil {
+		return fmt.Errorf("[START Container] unable to write pid to cgroup: %w", err)
 	}
 
 	return cmd.Wait()
