@@ -16,6 +16,11 @@ func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 		return fmt.Errorf("container id required")
 	}
 
+	absBundlePath, err := filepath.Abs(cfg.Bundle)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for bundle: %w", err)
+	}
+
 	containerStatePath := filepath.Join(cfg.BasePath, cfg.ID)
 	bundleConfigPath := filepath.Join(cfg.Bundle, "config.json")
 
@@ -37,6 +42,11 @@ func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 	newConfigPath := filepath.Join(containerStatePath, "config.json")
 	if err := os.WriteFile(newConfigPath, configJSON, 0644); err != nil {
 		return fmt.Errorf("failed to write config to state directory: %w", err)
+	}
+
+	bundlePathFile := filepath.Join(absBundlePath, "bundle_path.txt")
+	if err := os.WriteFile(bundlePathFile, []byte(absBundlePath), 0644); err != nil {
+		return fmt.Errorf("failed to write bundle path to state: %w", err)
 	}
 
 	log.Printf("Creating container {id:%s, bundle:%s, pidFile: %s}\n", cfg.ID, cfg.Bundle, cfg.PIDFile)
