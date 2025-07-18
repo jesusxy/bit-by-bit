@@ -15,13 +15,31 @@ func selfCgroupV2() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	var path string
+
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		parts := strings.SplitN(line, ":", 3)
 		if len(parts) == 3 && parts[0] == "0" { // unified hierarchy
-			return filepath.Join("/sys/fs/cgroup", parts[2]), nil
+			path = filepath.Join("/sys/fs/cgroup", parts[2])
+			break
 		}
 	}
-	return "", fmt.Errorf("no cgroup‑v2 entry found in /proc/self/cgroup")
+
+	if path == "" {
+		return "", fmt.Errorf("no cgroup-v2 entry found")
+	}
+
+	// If we landed in session‑*.scope, move up one level to user@UID.service
+	if strings.Contains(path, ".scope") && strings.Contains(path, "session-") {
+		uid := strconv.Itoa(os.Getuid())
+		candidate := filepath.Join("/sys/fs/cgroup",
+			"user.slice", "user-"+uid+".slice", "user@"+uid+".service")
+		if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+			path = candidate
+		}
+	}
+	return path, nil
 }
 
 func writeFile(path, val string) error {
