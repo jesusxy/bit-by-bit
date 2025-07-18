@@ -66,13 +66,13 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("[START Container] could not detect self cgroup: %w", err)
 	}
 
+	if err := enableControllers(selfCG); err != nil {
+		return fmt.Errorf("[START Container] failed to enable controllers: %w", err)
+	}
+
 	rorParent := filepath.Join(selfCG, "ror")
 	if err := os.MkdirAll(rorParent, 0755); err != nil {
 		return fmt.Errorf("[Start Container] failed to mkdir ror parent: %w", err)
-	}
-
-	if err := enableControllers(rorParent); err != nil {
-		return fmt.Errorf("[START Container] failed to enable controllers: %w", err)
 	}
 
 	cgroupPath := filepath.Join(rorParent, id)
