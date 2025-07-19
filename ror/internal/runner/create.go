@@ -44,7 +44,7 @@ func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 		return fmt.Errorf("failed to write config to state directory: %w", err)
 	}
 
-	bundlePathFile := filepath.Join(absBundlePath, "bundle_path.txt")
+	bundlePathFile := filepath.Join(containerStatePath, "bundle_path.txt")
 	if err := os.WriteFile(bundlePathFile, []byte(absBundlePath), 0644); err != nil {
 		return fmt.Errorf("failed to write bundle path to state: %w", err)
 	}
