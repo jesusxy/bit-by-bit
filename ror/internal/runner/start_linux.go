@@ -66,8 +66,10 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("[START Container] could not detect self cgroup: %w", err)
 	}
 
+	controllersEnabled := true
 	if err := enableControllers(selfCG); err != nil {
-		return fmt.Errorf("[START Container] failed to enable controllers: %w", err)
+		log.Printf("[WARN] could not enable controllers (%v) "+"starting without resource limits", err)
+		controllersEnabled = false
 	}
 
 	rorParent := filepath.Join(selfCG, "ror")
@@ -80,10 +82,12 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("failed to create cgroup directory %w", err)
 	}
 
-	if mem := spec.Linux.Resources.Memory; mem != nil && mem.Limit != nil && *mem.Limit > 0 {
-		if err := writeFile(filepath.Join(cgroupPath, "memory.max"),
-			strconv.FormatInt(*mem.Limit, 10)); err != nil {
-			return fmt.Errorf("set memory limit: %w", err)
+	if controllersEnabled {
+		if mem := spec.Linux.Resources.Memory; mem != nil && mem.Limit != nil && *mem.Limit > 0 {
+			if err := writeFile(filepath.Join(cgroupPath, "memory.max"),
+				strconv.FormatInt(*mem.Limit, 10)); err != nil {
+				return fmt.Errorf("set memory limit: %w", err)
+			}
 		}
 	}
 
@@ -97,7 +101,7 @@ func (r *Runner) StartContainer(id string) error {
 	cmd.Stderr = os.Stderr
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:                 syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWUSER | syscall.CLONE_NEWIPC,
+		Cloneflags:                 syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWUSER,
 		GidMappingsEnableSetgroups: false,
 		UidMappings:                uidMappings,
 		GidMappings:                gidMappings,
