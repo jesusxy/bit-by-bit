@@ -118,6 +118,10 @@ func mountFs(mounts []specs.Mount) error {
 			}
 		}
 
+		if mount.Type == "proc" || mount.Destination == "/proc" || mount.Type == "sysfs" || mount.Destination == "/sys" {
+			mountFlags |= syscall.MS_NODEV | syscall.MS_NOEXEC | syscall.MS_NOSUID
+		}
+		log.Printf("DEBUG mountFlags %#x", mountFlags)
 		data := strings.Join(dataOptions, ",")
 		log.Printf("Mounting %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
 
