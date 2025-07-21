@@ -35,7 +35,7 @@ func (r *Runner) InitContainer(id string) error {
 		return fmt.Errorf("failed to set hostname: %w", err)
 	}
 
-	absRootFsPath := "/mnt/ror/busybox-bundle" + "/" + spec.Root.Path
+	absRootFsPath := filepath.Join("..", "busybox-bundle", spec.Root.Path)
 
 	if err := pivotRoot(absRootFsPath); err != nil {
 		return fmt.Errorf("failed to pivot root: %w", err)
@@ -114,7 +114,7 @@ func mountFs(mounts []specs.Mount) error {
 		}
 
 		data := strings.Join(dataOptions, ",")
-		log.Printf("Mounting %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
+		log.Printf("Mounting %s to %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
 
 		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
 			if mount.Destination == "/sys" {
