@@ -35,7 +35,7 @@ func (r *Runner) InitContainer(id string) error {
 		return fmt.Errorf("failed to set hostname: %w", err)
 	}
 
-	absRootFsPath := filepath.Join("..", "busybox-bundle", spec.Root.Path)
+	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
 
 	if err := pivotRoot(absRootFsPath); err != nil {
 		return fmt.Errorf("failed to pivot root: %w", err)
@@ -95,11 +95,14 @@ func mountFs(mounts []specs.Mount) error {
 		"rbind":       syscall.MS_BIND | syscall.MS_REC,
 		"bind":        syscall.MS_BIND,
 		"strictatime": syscall.MS_STRICTATIME,
+		"relatime": syscall.MS_RELATIME,
 	}
 
 	for _, mount := range mounts {
-		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
-			return fmt.Errorf("failed to create mount dest %s:%w", mount.Destination, err)
+		if mount.Destination != "/" {
+			if err := os.MkdirAll(mount.Destination, 0755); err != nil {
+				return fmt.Errorf("failed to create mount dest %s:%w", mount.Destination, err)
+			}
 		}
 
 		var mountFlags uintptr
@@ -113,7 +116,18 @@ func mountFs(mounts []specs.Mount) error {
 			}
 		}
 
+		if mount.Destination == "/sys/fs/cgroup" {
+			log.Printf("Handling cgroup mount with a recursive bind mount to avoid EBUSY")
+			err := syscall.Mount("/sys/fs/cgroup", "/sys/fs/cgroup", "", mountFlags | syscall.MS_BIND | syscall.MS_REC, "")
+			if err != nil {
+				return fmt.Errorf("failed to bind mount cgrup fs -> %s:%w", mount.Destination, err)
+			}
+
+			continue
+		}
+
 		data := strings.Join(dataOptions, ",")
+
 		log.Printf("Mounting %s to %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
 
 		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
@@ -122,7 +136,7 @@ func mountFs(mounts []specs.Mount) error {
 				continue
 			}
 
-			return fmt.Errorf("fialed to mount -> %s:%w", mount.Destination, err)
+			return fmt.Errorf("failed to mount -> %s:%w", mount.Destination, err)
 		}
 	}
 
