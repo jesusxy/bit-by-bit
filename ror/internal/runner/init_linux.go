@@ -11,12 +11,15 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (r *Runner) InitContainer(id string) error {
+	time.Sleep(100 * time.Millisecond)
 	containerStatePath := filepath.Join(r.BasePath, id)
+
 	// Load the blueprint (config.json)
 	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
 	if err != nil {
@@ -30,19 +33,34 @@ func (r *Runner) InitContainer(id string) error {
 	}
 
 	log.Printf("Successfully loaded spec for container '%s'. Starting...", id)
-	// [ROR ROOTLESS] The following operations require CAP_SYS_ADMIN, which a rootless
-	// container does not have.
-	// if err := syscall.Sethostname([]byte(spec.Hostname)); err != nil {
-	// 	return fmt.Errorf("failed to set hostname: %w", err)
-	// }
+	log.Printf("Init process UID: %d, GID: %d", os.Getuid(), os.Getgid())
+	log.Printf("Init process EUID: %d, EGID: %d", os.Geteuid(), os.Getegid())
 
-	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
-
-	if err := pivotRoot(absRootFsPath); err != nil {
-		return fmt.Errorf("pivot_root failed: %w", err)
+	if os.Getuid() != 0 {
+		return fmt.Errorf("not root in user namespace, UID is %d", os.Geteuid())
 	}
 
+	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
+	log.Printf("Changing root to: %s", absRootFsPath)
+
+	if err := syscall.Chroot(absRootFsPath); err != nil {
+		return fmt.Errorf("chroot failed: %w", err)
+	}
+
+	if err := os.Chdir("/"); err != nil {
+		return fmt.Errorf("chdir to / failed: %w", err)
+	}
+
+	log.Printf("Successfully changed root")
+
 	mountFs(spec.Mounts)
+
+	for _, env := range spec.Process.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			os.Setenv(parts[0], parts[1])
+		}
+	}
 
 	command, err := exec.LookPath(spec.Process.Args[0])
 	if err != nil {
@@ -51,36 +69,6 @@ func (r *Runner) InitContainer(id string) error {
 
 	log.Printf("Exec-ing command: %s with args %v and env %v", command, spec.Process.Args, spec.Process.Env)
 	return syscall.Exec(command, spec.Process.Args, spec.Process.Env)
-}
-
-func pivotRoot(newRoot string) error {
-	if err := syscall.Mount(newRoot, newRoot, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("failed to bind mount new root: %w", err)
-	}
-
-	pivotDir := filepath.Join(newRoot, ".pivot_root")
-	if err := os.MkdirAll(pivotDir, 0755); err != nil {
-		return fmt.Errorf("failed to create pivot dir: %w", err)
-	}
-
-	if err := syscall.PivotRoot(newRoot, pivotDir); err != nil {
-		return fmt.Errorf("pivot_root failed: %w", err)
-	}
-
-	if err := os.Chdir("/"); err != nil {
-		return fmt.Errorf("chdir to new root failed: %w", err)
-	}
-
-	oldRoot := "/.pivot_root"
-	if err := syscall.Unmount(oldRoot, syscall.MNT_DETACH); err != nil {
-		log.Printf("[WARNING] failed to unmount old root: %v", err)
-	}
-
-	if err := os.RemoveAll(oldRoot); err != nil {
-		log.Printf("[WARNING] failed to remove old root dir: %v", err)
-	}
-
-	return nil
 }
 
 func mountFs(mounts []specs.Mount) {
@@ -96,6 +84,11 @@ func mountFs(mounts []specs.Mount) {
 	}
 
 	for _, mount := range mounts {
+		if isRootlessIncompatible(mount) {
+			log.Printf("[INFO] Skipping mount %s (incompatible with rootless)", mount.Destination)
+			continue
+		}
+
 		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
 			log.Printf("[WARNING]: could not create mount destination %s: %v", mount.Destination, err)
 			continue
@@ -117,7 +110,34 @@ func mountFs(mounts []specs.Mount) {
 		log.Printf("Mounting %s to %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
 
 		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
-			log.Printf("WARNING: could not mount %s: %v (this is expected in rootless mode)", mount.Destination, err)
+			log.Printf("[INFO] Mount %s failed: %v (this is often expected in rootless mode)", mount.Destination, err)
+		} else {
+			log.Printf("[INFO] Successfully mounted %s", mount.Destination)
 		}
 	}
+}
+
+func isRootlessIncompatible(mount specs.Mount) bool {
+	incompatibleTypes := map[string]bool{
+		"sysfs":   true,
+		"cgroup":  true,
+		"cgroup2": true,
+	}
+
+	incompatiblePaths := []string{
+		"/sys",
+		"/sys/fs/cgroup",
+	}
+
+	if incompatibleTypes[mount.Type] {
+		return true
+	}
+
+	for _, path := range incompatiblePaths {
+		if mount.Destination == path || strings.HasPrefix(mount.Destination, path+"/") {
+			return true
+		}
+	}
+
+	return false
 }
