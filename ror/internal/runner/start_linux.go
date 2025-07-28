@@ -15,7 +15,7 @@ import (
 )
 
 func (r *Runner) StartContainer(id string) error {
-	log.Printf("[RUNNING] container: %v\n", id)
+	log.Printf("[PARENT] starting container: %s\n", id)
 	// locate the container state via id
 	containerStatePath := filepath.Join(r.BasePath, id)
 
@@ -24,72 +24,60 @@ func (r *Runner) StartContainer(id string) error {
 		return fmt.Errorf("container with id '%s' does not exist", id)
 	}
 
-	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+	spec, err := r.loadSpec(containerStatePath)
 	if err != nil {
-		return fmt.Errorf("failed to read container config: %w", err)
+		return fmt.Errorf("could not load spec for container %s: %w", id, err)
 	}
 
-	var spec specs.Spec
-	if err := json.Unmarshal(configJSON, &spec); err != nil {
-		return fmt.Errorf("failed to unmarshal container spec: %w", err)
+	pipeR, pipeW, err := os.Pipe()
+	if err != nil {
+		return fmt.Errorf("failed to create pipe: %w", err)
 	}
-	// --- prepare the command to run ---
-	cmd := exec.Command("/proc/self/exe", "init", id)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	defer pipeW.Close()
 
-	var cloneFlags uintptr
-	hasUserNS := false
-
-	for _, ns := range spec.Linux.Namespaces {
-		switch ns.Type {
-		case "user":
-			cloneFlags |= syscall.CLONE_NEWUSER
-		case "pid":
-			cloneFlags |= syscall.CLONE_NEWPID
-		case "mount":
-			cloneFlags |= syscall.CLONE_NEWNS
-		case "uts":
-			cloneFlags |= syscall.CLONE_NEWUTS
-		case "ipc":
-			cloneFlags |= syscall.CLONE_NEWIPC
-		case "network":
-			cloneFlags |= syscall.CLONE_NEWNET
-		}
+	cmd := &exec.Cmd{
+		Path:       "/proc/self/exe",
+		Args:       []string{os.Args[0], "child", id},
+		Stdin:      os.Stdin,
+		Stdout:     os.Stdout,
+		Stderr:     os.Stderr,
+		ExtraFiles: []*os.File{pipeR}, // pass read end of the pipe to child
 	}
 
-	if !hasUserNS {
-		return fmt.Errorf("user namespace is required for rootless containers")
+	if !hasUserNamespace(spec) {
+		return fmt.Errorf("config.json must include a 'user' namspace for rootless mode")
 	}
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:                 cloneFlags,
-		GidMappingsEnableSetgroups: false,
+		Cloneflags: syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS | syscall.CLONE_NEWPID | syscall.CLONE_NEWUTS,
 	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start container init process: %w", err)
 	}
 
+	pipeR.Close()
 	pid := cmd.Process.Pid
-	log.Printf("Container process started with PID: %d", pid)
+	log.Printf("[PARENT] child process started with PID: %d", pid)
 
 	if err := writeIDMappings(pid, spec); err != nil {
 		cmd.Process.Kill()
 		return fmt.Errorf("failed to write ID mappings: %w", err)
 	}
 
-	pidFilePath := filepath.Join(containerStatePath, "pid")
-
-	if err := os.WriteFile(pidFilePath, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
-		return fmt.Errorf("failed to write pid file: %w", err)
+	log.Printf("[PARENT] wrote ID mappings for PID: %d", pid)
+	if _, err := pipeW.Write([]byte("go")); err != nil {
+		cmd.Process.Kill()
+		return fmt.Errorf("failed to signal child: %w", err)
 	}
 
+	pipeW.Close()
+
+	log.Printf("[PARENT] signaled child. Waiting for container to exit.")
 	return cmd.Wait()
 }
 
-func writeIDMappings(pid int, spec specs.Spec) error {
+func writeIDMappings(pid int, spec *specs.Spec) error {
 	uidMapPath := fmt.Sprintf("/proc/%d/uid_map", pid)
 	uidMapContent := ""
 
@@ -120,4 +108,33 @@ func writeIDMappings(pid int, spec specs.Spec) error {
 	}
 
 	return nil
+}
+
+func (r *Runner) loadSpec(containerStatePath string) (*specs.Spec, error) {
+	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+
+	if err != nil {
+		return nil, err
+	}
+
+	var spec specs.Spec
+	if err := json.Unmarshal(configJSON, &spec); err != nil {
+		return nil, err
+	}
+
+	return &spec, nil
+}
+
+func hasUserNamespace(spec *specs.Spec) bool {
+	if spec.Linux == nil {
+		return false
+	}
+
+	for _, ns := range spec.Linux.Namespaces {
+		if ns.Type == specs.UserNamespace {
+			return true
+		}
+	}
+
+	return false
 }
