@@ -11,13 +11,29 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (r *Runner) InitContainer(id string) error {
-	time.Sleep(100 * time.Millisecond)
+func (r *Runner) InitChild(id string) error {
+	log.Printf("[CHILD] Process started for container: %s", id)
+	pipe := os.NewFile(3, "sync-pipe")
+	buf := make([]byte, 2)
+	log.Printf("[CHILD] Waiting for parent to set up ID mappings....")
+
+	if _, err := pipe.Read(buf); err != nil {
+		return fmt.Errorf("failed to sync with parent: %w", err)
+	}
+	pipe.Close()
+
+	log.Printf("[CHILD] parent signaled. Continuing intitialization.")
+
+	if uid := os.Getuid(); uid != 0 {
+		return fmt.Errorf("expected to be root in new user namespace, but UID is %d", uid)
+	}
+
+	log.Printf("[CHILD] verified UID is 0 in the new user namespace.")
+
 	containerStatePath := filepath.Join(r.BasePath, id)
 
 	// Load the blueprint (config.json)
@@ -30,14 +46,6 @@ func (r *Runner) InitContainer(id string) error {
 	var spec specs.Spec
 	if err := json.Unmarshal(configJSON, &spec); err != nil {
 		return fmt.Errorf("failed to unmarshall bundle into OCI spec: %w", err)
-	}
-
-	log.Printf("Successfully loaded spec for container '%s'. Starting...", id)
-	log.Printf("Init process UID: %d, GID: %d", os.Getuid(), os.Getgid())
-	log.Printf("Init process EUID: %d, EGID: %d", os.Geteuid(), os.Getegid())
-
-	if os.Getuid() != 0 {
-		return fmt.Errorf("not root in user namespace, UID is %d", os.Geteuid())
 	}
 
 	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
@@ -84,11 +92,6 @@ func mountFs(mounts []specs.Mount) {
 	}
 
 	for _, mount := range mounts {
-		if isRootlessIncompatible(mount) {
-			log.Printf("[INFO] Skipping mount %s (incompatible with rootless)", mount.Destination)
-			continue
-		}
-
 		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
 			log.Printf("[WARNING]: could not create mount destination %s: %v", mount.Destination, err)
 			continue
@@ -115,29 +118,4 @@ func mountFs(mounts []specs.Mount) {
 			log.Printf("[INFO] Successfully mounted %s", mount.Destination)
 		}
 	}
-}
-
-func isRootlessIncompatible(mount specs.Mount) bool {
-	incompatibleTypes := map[string]bool{
-		"sysfs":   true,
-		"cgroup":  true,
-		"cgroup2": true,
-	}
-
-	incompatiblePaths := []string{
-		"/sys",
-		"/sys/fs/cgroup",
-	}
-
-	if incompatibleTypes[mount.Type] {
-		return true
-	}
-
-	for _, path := range incompatiblePaths {
-		if mount.Destination == path || strings.HasPrefix(mount.Destination, path+"/") {
-			return true
-		}
-	}
-
-	return false
 }
