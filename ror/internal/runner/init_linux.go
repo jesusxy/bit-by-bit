@@ -51,15 +51,42 @@ func (r *Runner) InitChild(id string) error {
 	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
 	log.Printf("Changing root to: %s", absRootFsPath)
 
-	if err := syscall.Chroot(absRootFsPath); err != nil {
-		return fmt.Errorf("chroot failed: %w", err)
+	// For rootless containers, we must use pivot_root instead of chroot
+	// First, we need to bind mount the new root to itself to make it a mount point
+	if err := syscall.Mount(absRootFsPath, absRootFsPath, "", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
+		return fmt.Errorf("failed to bind mount new root: %w", err)
 	}
 
+	// Create a temporary directory for the old root
+	oldRoot := filepath.Join(absRootFsPath, ".pivot_root")
+	if err := os.MkdirAll(oldRoot, 0755); err != nil {
+		return fmt.Errorf("failed to create old root dir: %w", err)
+	}
+
+	// Change to the new root before pivot_root
+	if err := os.Chdir(absRootFsPath); err != nil {
+		return fmt.Errorf("failed to chdir to new root: %w", err)
+	}
+
+	// Perform pivot_root
+	if err := syscall.PivotRoot(".", ".pivot_root"); err != nil {
+		return fmt.Errorf("pivot_root failed: %w", err)
+	}
+
+	// Change to the new root
 	if err := os.Chdir("/"); err != nil {
 		return fmt.Errorf("chdir to / failed: %w", err)
 	}
 
-	log.Printf("Successfully changed root")
+	// Unmount and remove the old root
+	if err := syscall.Unmount("/.pivot_root", syscall.MNT_DETACH); err != nil {
+		log.Printf("[WARNING] failed to unmount old root: %v", err)
+	}
+	if err := os.Remove("/.pivot_root"); err != nil {
+		log.Printf("[WARNING] failed to remove old root dir: %v", err)
+	}
+
+	log.Printf("Successfully changed root using pivot_root")
 
 	mountFs(spec.Mounts)
 
