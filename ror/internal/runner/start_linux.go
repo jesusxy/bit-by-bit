@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -35,8 +36,13 @@ func (r *Runner) StartContainer(id string) error {
 	}
 	defer pipeW.Close()
 
+	execPath, err := os.Executable()
+	if err != nil {
+		execPath = os.Args[0]
+		log.Printf("[WARN] couldnt get executable path, using %s", execPath)
+	}
 	cmd := &exec.Cmd{
-		Path:       "/proc/self/exe",
+		Path:       execPath,
 		Args:       []string{os.Args[0], "child", id},
 		Stdin:      os.Stdin,
 		Stdout:     os.Stdout,
@@ -77,7 +83,7 @@ func (r *Runner) StartContainer(id string) error {
 	return cmd.Wait()
 }
 
-func writeIDMappings(pid int, spec *specs.Spec) error {
+func writeIDMappingsDirect(pid int, spec *specs.Spec) error {
 	uidMapPath := fmt.Sprintf("/proc/%d/uid_map", pid)
 	uidMapContent := ""
 
@@ -107,6 +113,59 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 		return fmt.Errorf("failed to write gid_map: %w", err)
 	}
 
+	return nil
+}
+
+func writeIDMappings(pid int, spec *specs.Spec) error {
+	newuidmapPath, err := exec.LookPath("newuidmap")
+	if err != nil {
+		log.Printf("newuidmap not found, falling back to direct write (requires privileges)")
+		return writeIDMappingsDirect(pid, spec)
+	}
+
+	newgidmapPath, err := exec.LookPath("newgidmap")
+	if err != nil {
+		log.Printf("newgidmap not found, falling back to direct write (requires privileges)")
+		return writeIDMappingsDirect(pid, spec)
+	}
+
+	setgroupsPath := fmt.Sprintf("/proc/%d/setgroups", pid)
+	if err := os.WriteFile(setgroupsPath, []byte("deny"), 0644); err != nil {
+		return fmt.Errorf("failed to write setgroups: %w", err)
+	}
+
+	uidArgs := []string{strconv.Itoa(pid)}
+	for _, mapping := range spec.Linux.UIDMappings {
+		uidArgs = append(uidArgs,
+			strconv.Itoa(int(mapping.ContainerID)),
+			strconv.Itoa(int(mapping.HostID)),
+			strconv.Itoa(int(mapping.Size)))
+	}
+
+	cmd := exec.Command(newuidmapPath, uidArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("newuidmap failed: %v, output: %s", err, output)
+	}
+
+	log.Printf("Successfully set UID mappings using newuidmap")
+
+	gidArgs := []string{strconv.Itoa(pid)}
+	for _, mapping := range spec.Linux.GIDMappings {
+		gidArgs = append(gidArgs,
+			strconv.Itoa(int(mapping.ContainerID)),
+			strconv.Itoa(int(mapping.HostID)),
+			strconv.Itoa(int(mapping.Size)),
+		)
+	}
+
+	cmd = exec.Command(newgidmapPath, gidArgs...)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("newgidmap failed: %v, output: %w", err, output)
+	}
+
+	log.Printf("Successfully get GID mapping using newgidmap")
 	return nil
 }
 
