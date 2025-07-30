@@ -66,6 +66,11 @@ func (r *Runner) StartContainer(id string) error {
 	pid := cmd.Process.Pid
 	log.Printf("[PARENT] child process started with PID: %d", pid)
 
+	pidFilePath := filepath.Join(containerStatePath, "pid")
+	if err := os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+		log.Printf("[WARN] failed to write PID file: %v", err)
+	}
+
 	if err := writeIDMappings(pid, spec); err != nil {
 		cmd.Process.Kill()
 		return fmt.Errorf("failed to write ID mappings: %w", err)
