@@ -33,6 +33,10 @@ func (r *Runner) InitChild(id string) error {
 
 	log.Printf("[CHILD] verified UID is 0 in the new user namespace.")
 
+	if err := syscall.Sethostname([]byte("container")); err != nil {
+		log.Printf("[WARN] couldnt set hostname: %v", err)
+	}
+
 	containerStatePath := filepath.Join(r.BasePath, id)
 
 	// Load the blueprint (config.json)
