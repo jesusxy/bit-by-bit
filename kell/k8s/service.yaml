@@ -1,0 +1,12 @@
+appVersion: v1
+kind: Service
+metadata:
+  name: kell-app-Service
+spec:
+  type: LoadBalancer
+  selector:
+    app: kell
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
