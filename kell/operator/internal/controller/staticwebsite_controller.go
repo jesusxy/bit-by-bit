@@ -39,6 +39,8 @@ type StaticWebsiteReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// rbac = Role Based Access Controls
+
 //+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/finalizers,verbs=update

@@ -20,6 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// this is the source of truth for APIS shcema. if we wnanted a new field
+// we would add it to the StaticWebsiteSpec struct and then run [make generate]
+
 // StaticWebsiteSpec defines the desired state of a StaticWebsite.
 // This is what a user will provide in their YAML.
 type StaticWebsiteSpec struct {
