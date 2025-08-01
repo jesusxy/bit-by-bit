@@ -1,0 +1,7 @@
+apiVersion: webapp.com/v1alpha1
+kind: StaticWebsite
+metadata:
+  name: my-first-website
+spec:
+  gitRepo: "https://github.com/mdn/beginner-html-site-styled"
+  replicas: 2

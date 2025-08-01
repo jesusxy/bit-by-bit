@@ -1,0 +1,20 @@
+appVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kell-app-Deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kell
+  template:
+    metadata:
+      labels:
+        app: kell
+    spec:
+      containers:
+        - name: kell-app-container
+          image: kell-app:v1
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
