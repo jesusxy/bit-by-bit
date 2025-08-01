@@ -18,11 +18,17 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	webappv1alpha1 "github.com/jesusxy/bit-by-bit/kell/operator/api/v1alpha1"
 )
@@ -33,9 +39,11 @@ type StaticWebsiteReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=webapp.com,resources=staticwebsites,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/finalizers,verbs=update
+//+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=webapp.com,resources=staticwebsites/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -47,17 +55,145 @@ type StaticWebsiteReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
 func (r *StaticWebsiteReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	staticWebsite := &webappv1alpha1.StaticWebsite{}
+	err := r.Get(ctx, req.NamespacedName, staticWebsite)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("StaticWebsite resource not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
+		}
 
+		logger.Error(err, "Failed to get StaticWebsite")
+		return ctrl.Result{}, err
+	}
+
+	foundDeployment := &appsv1.Deployment{}
+	err = r.Get(ctx, types.NamespacedName{Name: staticWebsite.Name, Namespace: staticWebsite.Namespace}, foundDeployment)
+
+	if err != nil && errors.IsNotFound(err) {
+		// define new deployment
+		dep := r.deploymentForStaticWebsite(staticWebsite)
+		logger.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+		err = r.Create(ctx, dep)
+
+		if err != nil {
+			logger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
+			return ctrl.Result{}, err
+		}
+
+		// deployment created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		logger.Error(err, "Failed to get deployment")
+		return ctrl.Result{}, err
+	}
+
+	// ensure deployment size is the same as spec
+	size := staticWebsite.Spec.Replicas
+	if *foundDeployment.Spec.Replicas != size {
+		foundDeployment.Spec.Replicas = &size
+		err = r.Update(ctx, foundDeployment)
+		if err != nil {
+			logger.Error(err, "Failed to update Deployment", "Deployment.Namespace", foundDeployment.Namespace, "Deployment.Name", foundDeployment.Name)
+			return ctrl.Result{}, nil
+		}
+
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	foundService := &corev1.Service{}
+	err = r.Get(ctx, types.NamespacedName{Name: staticWebsite.Name, Namespace: staticWebsite.Namespace}, foundService)
+
+	if err != nil && errors.IsNotFound(err) {
+		// define a new service
+		svc := r.serviceForStaticWebsite(staticWebsite)
+		logger.Info("Creating a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
+		err = r.Create(ctx, svc)
+		if err != nil {
+			logger.Error(err, "Failed to create a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		logger.Error(err, "Failed to get Service")
+		return ctrl.Result{}, err
+	}
+
+	// all resources are in the desired state
 	return ctrl.Result{}, nil
+}
+
+func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.StaticWebsite) *appsv1.Deployment {
+	labels := map[string]string{"app": sw.Name}
+	replicas := sw.Spec.Replicas
+
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sw.Name,
+			Namespace: sw.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image: "ngins:latest",
+						Name:  "web-server",
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: 80,
+							Name:          "http",
+						}},
+						// This is a simplified approach. A real operator would use an initContainer
+						// to clone the repo into a shared volume for nginx to serve.
+						Command: []string{"/bin/sh", "-c"},
+						Args: []string{
+							fmt.Sprintf("apt-get update && apt-get install -y git && git clone %s /usr/share/nginx/html && nginx -g 'daemon off;'", sw.Spec.GitRepo),
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	ctrl.SetControllerReference(sw, dep, r.Scheme)
+	return dep
+}
+
+func (r *StaticWebsiteReconciler) serviceForStaticWebsite(sw *webappv1alpha1.StaticWebsite) *corev1.Service {
+	labels := map[string]string{"app": sw.Name}
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sw.Name,
+			Namespace: sw.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports: []corev1.ServicePort{{
+				Protocol:   "TCP",
+				Port:       80,
+				TargetPort: 80,
+			}},
+			Type: corev1.ServiceTypeLoadBalancer,
+		},
+	}
+	ctrl.SetControllerReference(sw, svc, r.Scheme)
+	return svc
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticWebsiteReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&webappv1alpha1.StaticWebsite{}).
-		Named("staticwebsite").
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
