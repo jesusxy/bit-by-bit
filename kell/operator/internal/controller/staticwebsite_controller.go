@@ -155,6 +155,10 @@ func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.
 					InitContainers: []corev1.Container{{
 						Name:  "git-content",
 						Image: "alpine/git:latest",
+						Env: []corev1.EnvVar{{
+							Name:  "GIT_TERMINAL_PROMPT",
+							Value: "0",
+						}},
 						Args: []string{
 							"clone",
 							"--single-branch",
