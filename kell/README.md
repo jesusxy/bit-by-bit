@@ -1,4 +1,4 @@
-# kell
+# Kell ☸️
 
 Inspired by the concept of a caul, `kell` is a minimalist Kubernetes operator that acts as a thin, controlling layer between user intent and underlying cluster resources.
 
