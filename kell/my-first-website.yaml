@@ -3,5 +3,5 @@ kind: StaticWebsite
 metadata:
   name: my-first-website
 spec:
-  gitRepo: "https://github.com/git-school/static-website-example.git"
+  gitRepo: "https://github.com/mdn/beginner-html-site-styled"
   replicas: 2
