@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -129,6 +129,13 @@ func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.
 	labels := map[string]string{"app": sw.Name}
 	replicas := sw.Spec.Replicas
 
+	webContentVolume := corev1.Volume{
+		Name: "web-content",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
+
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sw.Name,
@@ -144,19 +151,34 @@ func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{webContentVolume},
+					InitContainers: []corev1.Container{{
+						Name:  "git-content",
+						Image: "alpine/git:latest",
+						Args: []string{
+							"clone",
+							"--single-branch",
+							"--",
+							sw.Spec.GitRepo,
+							"/web-content",
+						},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "web-content",
+							MountPath: "/web-content",
+						}},
+					}},
 					Containers: []corev1.Container{{
-						Image: "ngins:latest",
+						Image: "nginx:latest",
 						Name:  "web-server",
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 80,
 							Name:          "http",
 						}},
-						// This is a simplified approach. A real operator would use an initContainer
-						// to clone the repo into a shared volume for nginx to serve.
-						Command: []string{"/bin/sh", "-c"},
-						Args: []string{
-							fmt.Sprintf("apt-get update && apt-get install -y git && git clone %s /usr/share/nginx/html && nginx -g 'daemon off;'", sw.Spec.GitRepo),
-						},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "web-content",
+							MountPath: "/usr/share/nginx/html",
+							ReadOnly:  true,
+						}},
 					}},
 				},
 			},
@@ -180,7 +202,7 @@ func (r *StaticWebsiteReconciler) serviceForStaticWebsite(sw *webappv1alpha1.Sta
 			Ports: []corev1.ServicePort{{
 				Protocol:   "TCP",
 				Port:       80,
-				TargetPort: 80,
+				TargetPort: intstr.FromInt(80),
 			}},
 			Type: corev1.ServiceTypeLoadBalancer,
 		},
