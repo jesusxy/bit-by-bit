@@ -126,6 +126,8 @@ func (r *StaticWebsiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.StaticWebsite) *appsv1.Deployment {
+	logger := log.FromContext(context.Background())
+	logger.Info(">>> Using V3 deployment logic with bitnami/git and explicit command <<<")
 	labels := map[string]string{"app": sw.Name}
 	replicas := sw.Spec.Replicas
 
@@ -154,11 +156,12 @@ func (r *StaticWebsiteReconciler) deploymentForStaticWebsite(sw *webappv1alpha1.
 					Volumes: []corev1.Volume{webContentVolume},
 					InitContainers: []corev1.Container{{
 						Name:  "git-content",
-						Image: "alpine/git:latest",
+						Image: "bitnami/git:latest",
 						Env: []corev1.EnvVar{{
 							Name:  "GIT_TERMINAL_PROMPT",
 							Value: "0",
 						}},
+						Command: []string{"git"},
 						Args: []string{
 							"clone",
 							"--single-branch",
