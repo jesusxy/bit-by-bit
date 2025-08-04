@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -71,50 +72,49 @@ func (r *StaticWebsiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
+	// --- Deployment Reconciliation ---
 	foundDeployment := &appsv1.Deployment{}
+	desiredDeployment := r.deploymentForStaticWebsite(staticWebsite)
 	err = r.Get(ctx, types.NamespacedName{Name: staticWebsite.Name, Namespace: staticWebsite.Namespace}, foundDeployment)
 
 	if err != nil && errors.IsNotFound(err) {
-		// define new deployment
-		dep := r.deploymentForStaticWebsite(staticWebsite)
-		logger.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-		err = r.Create(ctx, dep)
-
+		// create new dployment
+		logger.Info("Creating New Deployment", "Deployment.Namespace", desiredDeployment.Namespace, "Deployment.Name", desiredDeployment.Name)
+		err = r.Create(ctx, desiredDeployment)
 		if err != nil {
-			logger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			return ctrl.Result{}, err
+			logger.Error(err, "Failed to create new Deployment")
+			return ctrl.Result{Requeue: true}, nil
 		}
+	} else if err == nil {
+		// deployment found
+		if !reflect.DeepEqual(desiredDeployment.Spec, foundDeployment.Spec) {
+			logger.Info("Deployment spec is out of date, updating...")
+			foundDeployment.Spec = desiredDeployment.Spec
+			err = r.Update(ctx, foundDeployment)
 
-		// deployment created successfully - return and requeue
-		return ctrl.Result{Requeue: true}, nil
-	} else if err != nil {
+			if err != nil {
+				logger.Error(err, "Failed to update Deployment")
+				return ctrl.Result{}, err
+			}
+
+			return ctrl.Result{Requeue: true}, nil
+		}
+	} else {
 		logger.Error(err, "Failed to get deployment")
 		return ctrl.Result{}, err
 	}
 
-	// ensure deployment size is the same as spec
-	size := staticWebsite.Spec.Replicas
-	if *foundDeployment.Spec.Replicas != size {
-		foundDeployment.Spec.Replicas = &size
-		err = r.Update(ctx, foundDeployment)
-		if err != nil {
-			logger.Error(err, "Failed to update Deployment", "Deployment.Namespace", foundDeployment.Namespace, "Deployment.Name", foundDeployment.Name)
-			return ctrl.Result{}, nil
-		}
-
-		return ctrl.Result{Requeue: true}, nil
-	}
-
+	// --- Service Reconciliation ---\
 	foundService := &corev1.Service{}
 	err = r.Get(ctx, types.NamespacedName{Name: staticWebsite.Name, Namespace: staticWebsite.Namespace}, foundService)
 
 	if err != nil && errors.IsNotFound(err) {
 		// define a new service
-		svc := r.serviceForStaticWebsite(staticWebsite)
-		logger.Info("Creating a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
-		err = r.Create(ctx, svc)
+		desiredService := r.serviceForStaticWebsite(staticWebsite)
+		logger.Info("Creating a new Service", "Service.Namespace", desiredService.Namespace, "Service.Name", desiredService.Name)
+		err = r.Create(ctx, desiredService)
 		if err != nil {
-			logger.Error(err, "Failed to create a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
+			logger.Error(err, "Failed to create a new Service", "Service.Namespace", desiredService.Namespace, "Service.Name", desiredService.Name)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
@@ -122,6 +122,8 @@ func (r *StaticWebsiteReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		logger.Error(err, "Failed to get Service")
 		return ctrl.Result{}, err
 	}
+
+	// a real world operator would also compare the desiredService.Spec with the foundService.Spec and update if needed
 
 	// all resources are in the desired state
 	return ctrl.Result{}, nil
