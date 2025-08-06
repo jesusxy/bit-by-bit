@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -14,6 +15,28 @@ var Version = "dev"
 const defaultBasePath = "./run/ror"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "child" {
+		runner, err := runner.New(defaultBasePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[child]: failed to create runner %v\n", err)
+			os.Exit(1)
+		}
+
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "[child]: missing container ID")
+			os.Exit(1)
+		}
+
+		id := os.Args[2]
+
+		if err := runner.InitChild(id); err != nil {
+			fmt.Fprintf(os.Stderr, "[child]: init failed: %v\n", err)
+			os.Exit(1)
+		}
+
+		return
+	}
+
 	runner, err := runner.New(defaultBasePath)
 	if err != nil {
 		log.Fatal(err)
@@ -27,7 +50,6 @@ func main() {
 			newCreateCmd(runner),
 			newStartCmd(runner),
 			newDeleteCmd(runner),
-			newInitCmd(runner),
 		},
 	}
 

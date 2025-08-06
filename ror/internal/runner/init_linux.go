@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -15,8 +14,31 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func (r *Runner) InitContainer(id string) error {
+func (r *Runner) InitChild(id string) error {
+	log.Printf("[CHILD] Process started for container: %s", id)
+	pipe := os.NewFile(3, "sync-pipe")
+	buf := make([]byte, 2)
+	log.Printf("[CHILD] Waiting for parent to set up ID mappings....")
+
+	if _, err := pipe.Read(buf); err != nil {
+		return fmt.Errorf("failed to sync with parent: %w", err)
+	}
+	pipe.Close()
+
+	log.Printf("[CHILD] parent signaled. Continuing intitialization.")
+
+	if uid := os.Getuid(); uid != 0 {
+		return fmt.Errorf("expected to be root in new user namespace, but UID is %d", uid)
+	}
+
+	log.Printf("[CHILD] verified UID is 0 in the new user namespace.")
+
+	if err := syscall.Sethostname([]byte("container")); err != nil {
+		log.Printf("[WARN] couldnt set hostname: %v", err)
+	}
+
 	containerStatePath := filepath.Join(r.BasePath, id)
+
 	// Load the blueprint (config.json)
 	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
 	if err != nil {
@@ -29,64 +51,60 @@ func (r *Runner) InitContainer(id string) error {
 		return fmt.Errorf("failed to unmarshall bundle into OCI spec: %w", err)
 	}
 
-	log.Printf("Successfully loaded spec for container '%s'. Starting...", id)
-
-	if err := syscall.Sethostname([]byte(spec.Hostname)); err != nil {
-		return fmt.Errorf("failed to set hostname: %w", err)
-	}
-
 	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
+	log.Printf("Changing root to: %s", absRootFsPath)
 
-	if err := pivotRoot(absRootFsPath); err != nil {
-		return fmt.Errorf("failed to pivot root: %w", err)
+	log.Printf("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
+	log.Printf("Container processes will run in : %s", absRootFsPath)
+
+	if err := os.Chdir(absRootFsPath); err != nil {
+		return fmt.Errorf("chdir to / failed: %w", err)
 	}
 
-	if err := mountFs(spec.Mounts); err != nil {
-		return fmt.Errorf("failed to mount special filesystems: %w", err)
+	for _, env := range spec.Process.Env {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			os.Setenv(parts[0], parts[1])
+		}
 	}
 
-	command, err := exec.LookPath(spec.Process.Args[0])
-	if err != nil {
-		return fmt.Errorf("command '%s' not found in PATH: %w", spec.Process.Args[0], err)
+	containerPath := fmt.Sprintf("%s/bin:%s/usr/bin:%s/sbin:%s/usr/sbin",
+		absRootFsPath, absRootFsPath, absRootFsPath, absRootFsPath)
+	os.Setenv("PATH", containerPath)
+	os.Setenv("PWD", "/")
+
+	command := spec.Process.Args[0]
+
+	searchPaths := []string{
+		filepath.Join("bin", command),
+		filepath.Join("usr/bin", command),
+		filepath.Join("sbin", command),
+		filepath.Join("usr/sbin", command),
+		command,
 	}
 
-	log.Printf("Exec-ing command: %s with args %v and env %v", command, spec.Process.Args, spec.Process.Env)
-	return syscall.Exec(command, spec.Process.Args, spec.Process.Env)
+	execPath := ""
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			execPath = path
+			break
+		}
+	}
+
+	if execPath == "" {
+		return fmt.Errorf("command '%s' not found in container", command)
+	}
+
+	if !filepath.IsAbs(execPath) {
+		execPath = filepath.Join(absRootFsPath, execPath)
+	}
+
+	log.Printf("Exec-ing command: %s with args %v", command, spec.Process.Args)
+	spec.Process.Args[0] = execPath
+	return syscall.Exec(execPath, spec.Process.Args, os.Environ())
 }
 
-func pivotRoot(newRoot string) error {
-	// mark new root as a private mount to prevent mount events from propagating to host
-	if err := syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("failed to make root private: %w", err)
-	}
-
-	// bind mount new root to itself
-	if err := syscall.Mount(newRoot, newRoot, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("failed to bind mount new root: %w", err)
-	}
-
-	pivotDir := filepath.Join(newRoot, ".pivot_root")
-	if err := os.Mkdir(pivotDir, 0755); err != nil {
-		return fmt.Errorf("failed to create pivot dir: %w", err)
-	}
-
-	if err := syscall.PivotRoot(newRoot, pivotDir); err != nil {
-		return fmt.Errorf("pivot_root faile: %w", err)
-	}
-
-	if err := os.Chdir("/"); err != nil {
-		return fmt.Errorf("chdir to new root failed: %w", err)
-	}
-
-	oldRoot := "/.pivot_root"
-	if err := syscall.Unmount(oldRoot, syscall.MNT_DETACH); err != nil {
-		return fmt.Errorf("failed to unmount old root: %w", err)
-	}
-
-	return os.RemoveAll(oldRoot)
-}
-
-func mountFs(mounts []specs.Mount) error {
+func mountFs(mounts []specs.Mount) {
 	optionsMap := map[string]uintptr{
 		"ro":          syscall.MS_RDONLY,
 		"nosuid":      syscall.MS_NOSUID,
@@ -95,14 +113,13 @@ func mountFs(mounts []specs.Mount) error {
 		"rbind":       syscall.MS_BIND | syscall.MS_REC,
 		"bind":        syscall.MS_BIND,
 		"strictatime": syscall.MS_STRICTATIME,
-		"relatime": syscall.MS_RELATIME,
+		"relatime":    syscall.MS_RELATIME,
 	}
 
 	for _, mount := range mounts {
-		if mount.Destination != "/" {
-			if err := os.MkdirAll(mount.Destination, 0755); err != nil {
-				return fmt.Errorf("failed to create mount dest %s:%w", mount.Destination, err)
-			}
+		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
+			log.Printf("[WARNING]: could not create mount destination %s: %v", mount.Destination, err)
+			continue
 		}
 
 		var mountFlags uintptr
@@ -116,29 +133,14 @@ func mountFs(mounts []specs.Mount) error {
 			}
 		}
 
-		if mount.Destination == "/sys/fs/cgroup" {
-			log.Printf("Handling cgroup mount with a recursive bind mount to avoid EBUSY")
-			err := syscall.Mount("/sys/fs/cgroup", "/sys/fs/cgroup", "", mountFlags | syscall.MS_BIND | syscall.MS_REC, "")
-			if err != nil {
-				return fmt.Errorf("failed to bind mount cgrup fs -> %s:%w", mount.Destination, err)
-			}
-
-			continue
-		}
-
 		data := strings.Join(dataOptions, ",")
 
 		log.Printf("Mounting %s to %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
 
 		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
-			if mount.Destination == "/sys" {
-				log.Printf("optional /sys mount failed: %v", err)
-				continue
-			}
-
-			return fmt.Errorf("failed to mount -> %s:%w", mount.Destination, err)
+			log.Printf("[INFO] Mount %s failed: %v (this is often expected in rootless mode)", mount.Destination, err)
+		} else {
+			log.Printf("[INFO] Successfully mounted %s", mount.Destination)
 		}
 	}
-
-	return nil
 }
