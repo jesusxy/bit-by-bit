@@ -1,4 +1,4 @@
-# Rootless OCI Runner (ROR) 🦁 
+# ROR 🦁  – Rootless OCI Runner
 
 ### Security Model
 
