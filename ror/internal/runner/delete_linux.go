@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -45,7 +46,7 @@ func (r *Runner) terminateContainerProcess(containerStatePath string) error {
 		return fmt.Errorf("failed to read contents from pid file: %w", err)
 	}
 
-	pid, err := strconv.Atoi(string(content))
+	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
 	if err != nil {
 		return fmt.Errorf("failed to parse pid: %w", err)
 	}
@@ -54,9 +55,8 @@ func (r *Runner) terminateContainerProcess(containerStatePath string) error {
 		if errors.Is(err, syscall.ESRCH) {
 			return nil // process doesnt exist
 		}
-		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-			return fmt.Errorf("failed to kill process %d: %w", pid, err)
-		}
+
+		return fmt.Errorf("failed to kill process %d: %w", pid, err)
 	}
 
 	log.Printf("Terminated process %d", pid)
