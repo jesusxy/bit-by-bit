@@ -66,19 +66,19 @@ whoami
 ### Limitations & Security Model
 This runtime is a learning tool and has significant security limitations compared to production runtimes like Podman or Docker.
 
-- No Filesystem Isolation: The most important limitation is that the container can access the host filesystem. This is because modern Linux kernels, often hardened with security modules like AppArmor, prevent unprivileged users from using the chroot() or pivot_root() syscalls needed for true filesystem jailing. As a workaround, ror simply uses Chdir to change into the container's rootfs.
-- No Network Isolation: The container currently shares the host's network.
-- Partial PID Isolation: While a new PID namespace is created, tools like ps will still see host processes because a private /proc filesystem is not mounted (this is also blocked by host security policies).
-- Partial UTS Isolation: A new UTS namespace is created, but the sethostname call is blocked, so the container inherits the host's name by default.
+- `No Filesystem Isolation:` The most important limitation is that the container can access the host filesystem. This is because modern Linux kernels, often hardened with security modules like AppArmor, prevent unprivileged users from using the chroot() or pivot_root() syscalls needed for true filesystem jailing. As a workaround, ror simply uses Chdir to change into the container's rootfs.
+- `No Network Isolation:` The container currently shares the host's network.
+- `Partial PID Isolation:` While a new PID namespace is created, tools like ps will still see host processes because a private /proc filesystem is not mounted (this is also blocked by host security policies).
+- `Partial UTS Isolation:` A new UTS namespace is created, but the sethostname call is blocked, so the container inherits the host's name by default.
 
 ### What's Isolated:
-- **User Namespace**: This is the core success of the runtime. The container runs with a proper UID/GID mapping, where the internal `root` user is mapped to an unprivileged user on the host. This is proven by the `whoami` command returning `root`.
+- **`User Namespace`**: This is the core success of the runtime. The container runs with a proper UID/GID mapping, where the internal `root` user is mapped to an unprivileged user on the host. This is proven by the `whoami` command returning `root`.
 
-- **PID Namespace**: A new PID namespace is successfully created. However, because the host environment prevents the mounting of a new `/proc` filesystem, tools like `ps` inside the container still read the host's `/proc` and see all host processes.
+- **`PID Namespace`**: A new PID namespace is successfully created. However, because the host environment prevents the mounting of a new `/proc` filesystem, tools like `ps` inside the container still read the host's `/proc` and see all host processes.
 
-- **UTS Namespace**: A new UTS namespace is created, giving the container the *potential* for its own hostname. However, the initial `sethostname` call is blocked by host security policies, so the container inherits the host's name by default.
+- **`UTS Namespace`**: A new UTS namespace is created, giving the container the *potential* for its own hostname. However, the initial `sethostname` call is blocked by host security policies, so the container inherits the host's name by default.
 
-- **Mount Namespace**: A new mount namespace is created, but it is not utilized. The container inherits the host's view of the filesystem mounts.
+- **`Mount Namespace`**: A new mount namespace is created, but it is not utilized. The container inherits the host's view of the filesystem mounts.
 
 
 ### Security Implications
