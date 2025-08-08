@@ -6,17 +6,16 @@ import (
 	"log"
 	"os"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
 	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
 
 var Version = "dev"
 
-const defaultBasePath = "./run/ror"
-
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "child" {
-		runner, err := runner.New(defaultBasePath)
+		runner, err := runner.New(constants.DefaultBasePath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[child]: failed to create runner %v\n", err)
 			os.Exit(1)
@@ -37,7 +36,7 @@ func main() {
 		return
 	}
 
-	runner, err := runner.New(defaultBasePath)
+	runner, err := runner.New(constants.DefaultBasePath)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -66,8 +67,8 @@ func (r *Runner) StartContainer(id string) error {
 	pid := cmd.Process.Pid
 	log.Printf("[PARENT] child process started with PID: %d", pid)
 
-	pidFilePath := filepath.Join(containerStatePath, "pid")
-	if err := os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)), 0644); err != nil {
+	pidFilePath := filepath.Join(containerStatePath, constants.PIDFileName)
+	if err := os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)), constants.DefaultFilePermissions); err != nil {
 		log.Printf("[WARN] failed to write PID file: %v", err)
 	}
 
@@ -97,12 +98,12 @@ func writeIDMappingsDirect(pid int, spec *specs.Spec) error {
 	}
 
 	log.Printf("Writing UID mappings to %s: %s", uidMapPath, uidMapContent)
-	if err := os.WriteFile(uidMapPath, []byte(uidMapContent), 0644); err != nil {
+	if err := os.WriteFile(uidMapPath, []byte(uidMapContent), constants.DefaultFilePermissions); err != nil {
 		return fmt.Errorf("failed to write uid_map: %w", err)
 	}
 
 	setGroupsPath := fmt.Sprintf("/proc/%d/setgroups", pid)
-	if err := os.WriteFile(setGroupsPath, []byte("deny"), 0644); err != nil {
+	if err := os.WriteFile(setGroupsPath, []byte("deny"), constants.DefaultFilePermissions); err != nil {
 		return fmt.Errorf("failed to write setgroups: %w", err)
 	}
 
@@ -114,7 +115,7 @@ func writeIDMappingsDirect(pid int, spec *specs.Spec) error {
 	}
 
 	log.Printf("Writing GID mappings to %s: %s", gidMapPath, gidMapContent)
-	if err := os.WriteFile(gidMapPath, []byte(gidMapContent), 0644); err != nil {
+	if err := os.WriteFile(gidMapPath, []byte(gidMapContent), constants.DefaultFilePermissions); err != nil {
 		return fmt.Errorf("failed to write gid_map: %w", err)
 	}
 
@@ -135,7 +136,7 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 	}
 
 	setgroupsPath := fmt.Sprintf("/proc/%d/setgroups", pid)
-	if err := os.WriteFile(setgroupsPath, []byte("deny"), 0644); err != nil {
+	if err := os.WriteFile(setgroupsPath, []byte("deny"), constants.DefaultFilePermissions); err != nil {
 		return fmt.Errorf("failed to write setgroups: %w", err)
 	}
 
@@ -175,7 +176,7 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 }
 
 func (r *Runner) loadSpec(containerStatePath string) (*specs.Spec, error) {
-	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, constants.ConfigFileName))
 
 	if err != nil {
 		return nil, err

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
 )
 
 // would I pass the processId here as an arg?
@@ -34,7 +36,7 @@ func (r *Runner) DeleteContainer(id string) error {
 }
 
 func (r *Runner) terminateContainerProcess(containerStatePath string) error {
-	pidFilePath := filepath.Join(containerStatePath, "pid")
+	pidFilePath := filepath.Join(containerStatePath, constants.PIDFileName)
 
 	// i think im missing the pid in the path here when reading from the containers state dir
 	content, err := os.ReadFile(pidFilePath)
