@@ -168,7 +168,7 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 	cmd = exec.Command(newgidmapPath, gidArgs...)
 	output, err = cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("newgidmap failed: %v, output: %w", err, output)
+		return fmt.Errorf("newgidmap failed: %v, output: %w", output, err)
 	}
 
 	log.Printf("Successfully get GID mapping using newgidmap")
