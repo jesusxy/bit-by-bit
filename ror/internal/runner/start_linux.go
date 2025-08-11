@@ -13,11 +13,12 @@ import (
 	"syscall"
 
 	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (r *Runner) StartContainer(id string) error {
-	log.Printf("[PARENT] starting container: %s\n", id)
+	logger.ParentWithID(id, "starting container:")
 	// locate the container state via id
 	containerStatePath := filepath.Join(r.BasePath, id)
 
@@ -40,7 +41,7 @@ func (r *Runner) StartContainer(id string) error {
 	execPath, err := os.Executable()
 	if err != nil {
 		execPath = os.Args[0]
-		log.Printf("[WARN] couldnt get executable path, using %s", execPath)
+		logger.Warn("[WARN] couldnt get executable path, using %s", execPath)
 	}
 	cmd := &exec.Cmd{
 		Path:       execPath,
@@ -65,11 +66,11 @@ func (r *Runner) StartContainer(id string) error {
 
 	pipeR.Close()
 	pid := cmd.Process.Pid
-	log.Printf("[PARENT] child process started with PID: %d", pid)
+	logger.ParentWithID(pid, "child process started with id: %d")
 
 	pidFilePath := filepath.Join(containerStatePath, constants.PIDFileName)
 	if err := os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)), constants.DefaultFilePermissions); err != nil {
-		log.Printf("[WARN] failed to write PID file: %v", err)
+		logger.Warn("failed to write PID file: %v", err)
 	}
 
 	if err := writeIDMappings(pid, spec); err != nil {
@@ -85,7 +86,7 @@ func (r *Runner) StartContainer(id string) error {
 
 	pipeW.Close()
 
-	log.Printf("[PARENT] signaled child. Waiting for container to exit.")
+	logger.Parent("signaled child. Waiting for container to exit.")
 	return cmd.Wait()
 }
 
@@ -125,13 +126,13 @@ func writeIDMappingsDirect(pid int, spec *specs.Spec) error {
 func writeIDMappings(pid int, spec *specs.Spec) error {
 	newuidmapPath, err := exec.LookPath("newuidmap")
 	if err != nil {
-		log.Printf("newuidmap not found, falling back to direct write (requires privileges)")
+		logger.Error("newuidmap not found, falling back to direct write (requires privileges)")
 		return writeIDMappingsDirect(pid, spec)
 	}
 
 	newgidmapPath, err := exec.LookPath("newgidmap")
 	if err != nil {
-		log.Printf("newgidmap not found, falling back to direct write (requires privileges)")
+		logger.Error("newgidmap not found, falling back to direct write (requires privileges)")
 		return writeIDMappingsDirect(pid, spec)
 	}
 
@@ -154,7 +155,7 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 		return fmt.Errorf("newuidmap failed: %v, output: %s", err, output)
 	}
 
-	log.Printf("Successfully set UID mappings using newuidmap")
+	logger.Info("Successfully set UID mappings using newuidmap")
 
 	gidArgs := []string{strconv.Itoa(pid)}
 	for _, mapping := range spec.Linux.GIDMappings {
@@ -171,7 +172,8 @@ func writeIDMappings(pid int, spec *specs.Spec) error {
 		return fmt.Errorf("newgidmap failed: %v, output: %w", output, err)
 	}
 
-	log.Printf("Successfully get GID mapping using newgidmap")
+	logger.Info("Successfully set GID mapping using newgidmap")
+
 	return nil
 }
 
