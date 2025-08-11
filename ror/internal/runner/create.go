@@ -3,11 +3,11 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/jesuskeys/bit-by-bit/ror/internal/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -40,6 +40,6 @@ func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 		return fmt.Errorf("failed to write config to state directory: %w", err)
 	}
 
-	log.Printf("Creating container {id:%s, bundle:%s, pidFile: %s}\n", cfg.ID, cfg.Bundle, cfg.PIDFile)
+	logger.Info("Creating container {id: %s, bundle: %s, pidFile: %s}\n", cfg.ID, cfg.Bundle, cfg.PIDFile)
 	return nil
 }

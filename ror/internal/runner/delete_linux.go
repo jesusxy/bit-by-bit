@@ -5,7 +5,6 @@ package runner
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 )
 
 // would I pass the processId here as an arg?
@@ -24,13 +24,14 @@ func (r *Runner) DeleteContainer(id string) error {
 	}
 
 	if err := r.terminateContainerProcess(containerStatePath); err != nil {
-		log.Printf("Failed to terminate process for container %s: %v", id, err)
+		logger.Error("Failed to terminate process for container %s: %v", id, err)
 	}
 
 	if err := os.RemoveAll(containerStatePath); err != nil {
 		return fmt.Errorf("failed to remove container directory: %w", err)
 	}
-	fmt.Printf("Container %s deleted\n", id)
+
+	logger.Info("Container %s deleted\n", id)
 
 	return nil
 }
@@ -61,6 +62,7 @@ func (r *Runner) terminateContainerProcess(containerStatePath string) error {
 		return fmt.Errorf("failed to kill process %d: %w", pid, err)
 	}
 
-	log.Printf("Terminated process %d", pid)
+	logger.Info("Terminated process %d", pid)
+
 	return nil
 }

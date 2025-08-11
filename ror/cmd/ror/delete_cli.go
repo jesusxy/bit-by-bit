@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
@@ -19,7 +19,7 @@ func newDeleteCmd(r *runner.Runner) *cli.Command {
 			}
 
 			id := cmd.Args().First()
-			fmt.Printf("Deleting container %s\n", id)
+			logger.Info("Deleting container %s\n", id)
 			return r.DeleteContainer(id)
 		},
 	}

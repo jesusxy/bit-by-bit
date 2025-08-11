@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/jesuskeys/bit-by-bit/ror/internal/runner"
 	"github.com/urfave/cli/v3"
 )
@@ -17,6 +18,7 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "child" {
 		runner, err := runner.New(constants.DefaultBasePath)
 		if err != nil {
+			logger.Error("failed to create runner: %v", err)
 			fmt.Fprintf(os.Stderr, "[child]: failed to create runner %v\n", err)
 			os.Exit(1)
 		}
@@ -29,6 +31,7 @@ func main() {
 		id := os.Args[2]
 
 		if err := runner.InitChild(id); err != nil {
+			logger.Error("init failed for container %s:%v", id, err)
 			fmt.Fprintf(os.Stderr, "[child]: init failed: %v\n", err)
 			os.Exit(1)
 		}

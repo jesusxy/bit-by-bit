@@ -5,37 +5,37 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (r *Runner) InitChild(id string) error {
-	log.Printf("[CHILD] Process started for container: %s", id)
+	logger.ChildWithID(id, "Process started for container: %s")
 	pipe := os.NewFile(3, "sync-pipe")
 	buf := make([]byte, 2)
-	log.Printf("[CHILD] Waiting for parent to set up ID mappings....")
+	logger.Child("Waiting for parent to set up ID mappings...")
 
 	if _, err := pipe.Read(buf); err != nil {
 		return fmt.Errorf("failed to sync with parent: %w", err)
 	}
 	pipe.Close()
 
-	log.Printf("[CHILD] parent signaled. Continuing intitialization.")
+	logger.Child("parent signaled. Continuing initialization.")
 
 	if uid := os.Getuid(); uid != 0 {
 		return fmt.Errorf("expected to be root in new user namespace, but UID is %d", uid)
 	}
 
-	log.Printf("[CHILD] verified UID is 0 in the new user namespace.")
+	logger.Child("verified UID is 0 in the new user namespace.")
 
 	if err := syscall.Sethostname([]byte("container")); err != nil {
-		log.Printf("[WARN] couldnt set hostname: %v", err)
+		logger.Warn("couldnt set hostname: %v", err)
 	}
 
 	containerStatePath := filepath.Join(r.BasePath, id)
@@ -53,10 +53,10 @@ func (r *Runner) InitChild(id string) error {
 	}
 
 	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
-	log.Printf("Changing root to: %s", absRootFsPath)
+	logger.Info("Changing root to: %s", absRootFsPath)
 
-	log.Printf("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
-	log.Printf("Container processes will run in : %s", absRootFsPath)
+	logger.Info("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
+	logger.Info("Container process will run in: %s", absRootFsPath)
 
 	if err := os.Chdir(absRootFsPath); err != nil {
 		return fmt.Errorf("chdir to / failed: %w", err)
@@ -100,7 +100,7 @@ func (r *Runner) InitChild(id string) error {
 		execPath = filepath.Join(absRootFsPath, execPath)
 	}
 
-	log.Printf("Exec-ing command: %s with args %v", command, spec.Process.Args)
+	logger.Info("Exec-ing command %s with args %v", command, spec.Process.Args)
 	spec.Process.Args[0] = execPath
 	return syscall.Exec(execPath, spec.Process.Args, os.Environ())
 }
