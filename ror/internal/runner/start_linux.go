@@ -18,7 +18,7 @@ import (
 )
 
 func (r *Runner) StartContainer(id string) error {
-	logger.ParentWithID(id, "starting container: %v")
+	logger.ParentWithID("starting container: %v", id)
 	// locate the container state via id
 	containerStatePath := filepath.Join(r.BasePath, id)
 
