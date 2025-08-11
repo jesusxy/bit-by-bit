@@ -5,11 +5,14 @@ package runner
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
+
+	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 )
 
 // would I pass the processId here as an arg?
@@ -21,19 +24,20 @@ func (r *Runner) DeleteContainer(id string) error {
 	}
 
 	if err := r.terminateContainerProcess(containerStatePath); err != nil {
-		log.Printf("Failed to terminate process for container %s: %v", id, err)
+		logger.Error("Failed to terminate process for container %s: %v", id, err)
 	}
 
 	if err := os.RemoveAll(containerStatePath); err != nil {
 		return fmt.Errorf("failed to remove container directory: %w", err)
 	}
-	fmt.Printf("Container %s deleted\n", id)
+
+	logger.Info("Container %s deleted\n", id)
 
 	return nil
 }
 
 func (r *Runner) terminateContainerProcess(containerStatePath string) error {
-	pidFilePath := filepath.Join(containerStatePath, "pid")
+	pidFilePath := filepath.Join(containerStatePath, constants.PIDFileName)
 
 	// i think im missing the pid in the path here when reading from the containers state dir
 	content, err := os.ReadFile(pidFilePath)
@@ -45,7 +49,7 @@ func (r *Runner) terminateContainerProcess(containerStatePath string) error {
 		return fmt.Errorf("failed to read contents from pid file: %w", err)
 	}
 
-	pid, err := strconv.Atoi(string(content))
+	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
 	if err != nil {
 		return fmt.Errorf("failed to parse pid: %w", err)
 	}
@@ -54,11 +58,11 @@ func (r *Runner) terminateContainerProcess(containerStatePath string) error {
 		if errors.Is(err, syscall.ESRCH) {
 			return nil // process doesnt exist
 		}
-		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-			return fmt.Errorf("failed to kill process %d: %w", pid, err)
-		}
+
+		return fmt.Errorf("failed to kill process %d: %w", pid, err)
 	}
 
-	log.Printf("Terminated process %d", pid)
+	logger.Info("Terminated process %d", pid)
+
 	return nil
 }

@@ -5,42 +5,43 @@ package runner
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/jesuskeys/bit-by-bit/ror/internal/constants"
+	"github.com/jesuskeys/bit-by-bit/ror/internal/logger"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func (r *Runner) InitChild(id string) error {
-	log.Printf("[CHILD] Process started for container: %s", id)
+	logger.ChildWithID(id, "Process started for container: %s")
 	pipe := os.NewFile(3, "sync-pipe")
 	buf := make([]byte, 2)
-	log.Printf("[CHILD] Waiting for parent to set up ID mappings....")
+	logger.Child("Waiting for parent to set up ID mappings...")
 
 	if _, err := pipe.Read(buf); err != nil {
 		return fmt.Errorf("failed to sync with parent: %w", err)
 	}
 	pipe.Close()
 
-	log.Printf("[CHILD] parent signaled. Continuing intitialization.")
+	logger.Child("parent signaled. Continuing initialization.")
 
 	if uid := os.Getuid(); uid != 0 {
 		return fmt.Errorf("expected to be root in new user namespace, but UID is %d", uid)
 	}
 
-	log.Printf("[CHILD] verified UID is 0 in the new user namespace.")
+	logger.Child("verified UID is 0 in the new user namespace.")
 
 	if err := syscall.Sethostname([]byte("container")); err != nil {
-		log.Printf("[WARN] couldnt set hostname: %v", err)
+		logger.Warn("couldnt set hostname: %v", err)
 	}
 
 	containerStatePath := filepath.Join(r.BasePath, id)
 
 	// Load the blueprint (config.json)
-	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, "config.json"))
+	configJSON, err := os.ReadFile(filepath.Join(containerStatePath, constants.ConfigFileName))
 	if err != nil {
 		return fmt.Errorf("failed to read bundle config: %w", err)
 	}
@@ -52,10 +53,10 @@ func (r *Runner) InitChild(id string) error {
 	}
 
 	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
-	log.Printf("Changing root to: %s", absRootFsPath)
+	logger.Info("Changing root to: %s", absRootFsPath)
 
-	log.Printf("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
-	log.Printf("Container processes will run in : %s", absRootFsPath)
+	logger.Info("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
+	logger.Info("Container process will run in: %s", absRootFsPath)
 
 	if err := os.Chdir(absRootFsPath); err != nil {
 		return fmt.Errorf("chdir to / failed: %w", err)
@@ -99,48 +100,7 @@ func (r *Runner) InitChild(id string) error {
 		execPath = filepath.Join(absRootFsPath, execPath)
 	}
 
-	log.Printf("Exec-ing command: %s with args %v", command, spec.Process.Args)
+	logger.Info("Exec-ing command %s with args %v", command, spec.Process.Args)
 	spec.Process.Args[0] = execPath
 	return syscall.Exec(execPath, spec.Process.Args, os.Environ())
-}
-
-func mountFs(mounts []specs.Mount) {
-	optionsMap := map[string]uintptr{
-		"ro":          syscall.MS_RDONLY,
-		"nosuid":      syscall.MS_NOSUID,
-		"noexec":      syscall.MS_NOEXEC,
-		"nodev":       syscall.MS_NODEV,
-		"rbind":       syscall.MS_BIND | syscall.MS_REC,
-		"bind":        syscall.MS_BIND,
-		"strictatime": syscall.MS_STRICTATIME,
-		"relatime":    syscall.MS_RELATIME,
-	}
-
-	for _, mount := range mounts {
-		if err := os.MkdirAll(mount.Destination, 0755); err != nil {
-			log.Printf("[WARNING]: could not create mount destination %s: %v", mount.Destination, err)
-			continue
-		}
-
-		var mountFlags uintptr
-		var dataOptions []string
-
-		for _, opt := range mount.Options {
-			if flag, exists := optionsMap[opt]; exists {
-				mountFlags |= flag
-			} else {
-				dataOptions = append(dataOptions, opt)
-			}
-		}
-
-		data := strings.Join(dataOptions, ",")
-
-		log.Printf("Mounting %s to %s, type: %s, flags: %d, data: %s", mount.Source, mount.Destination, mount.Type, mountFlags, data)
-
-		if err := syscall.Mount(mount.Source, mount.Destination, mount.Type, mountFlags, data); err != nil {
-			log.Printf("[INFO] Mount %s failed: %v (this is often expected in rootless mode)", mount.Destination, err)
-		} else {
-			log.Printf("[INFO] Successfully mounted %s", mount.Destination)
-		}
-	}
 }
