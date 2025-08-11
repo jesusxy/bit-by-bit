@@ -23,17 +23,17 @@ func Error(format string, args ...interface{}) {
 }
 
 // loggin with container ID
-func ParentWithID(containerID, format string, args ...interface{}) {
+func ParentWithID(format, containerID string, args ...interface{}) {
 	allArgs := append([]interface{}{containerID}, args...)
 	log.Printf("[PARENT] [%s] "+format, allArgs...)
 }
 
-func ChildWithID(containerID, format string, args ...interface{}) {
+func ChildWithID(format, containerID string, args ...interface{}) {
 	allArgs := append([]interface{}{containerID}, args...)
 	log.Printf("[CHILD] [%s] "+format, allArgs...)
 }
 
-func InfoWithID(containerID, format string, args ...interface{}) {
+func InfoWithID(format, containerID string, args ...interface{}) {
 	allArgs := append([]interface{}{containerID}, args...)
 	log.Printf("[INFO] [%s] "+format, allArgs...)
 }
