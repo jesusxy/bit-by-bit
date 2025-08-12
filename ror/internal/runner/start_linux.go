@@ -18,7 +18,7 @@ import (
 )
 
 func (r *Runner) StartContainer(id string) error {
-	logger.ParentWithID("starting container: %v", id)
+	logger.Parent("starting container::%s", id)
 	// locate the container state via id
 	containerStatePath := filepath.Join(r.BasePath, id)
 
@@ -66,7 +66,7 @@ func (r *Runner) StartContainer(id string) error {
 
 	pipeR.Close()
 	pid := cmd.Process.Pid
-	logger.Parent("child process started with pid: ", pid)
+	logger.Parent("child process started with pid: %d", pid)
 
 	pidFilePath := filepath.Join(containerStatePath, constants.PIDFileName)
 	if err := os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)), constants.DefaultFilePermissions); err != nil {

@@ -16,7 +16,7 @@ import (
 )
 
 func (r *Runner) InitChild(id string) error {
-	logger.ChildWithID("Process started for container: %s", id)
+	logger.Child("Process started for container::%s", id)
 	pipe := os.NewFile(3, "sync-pipe")
 	buf := make([]byte, 2)
 	logger.Child("Waiting for parent to set up ID mappings...")
