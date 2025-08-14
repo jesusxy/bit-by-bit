@@ -52,7 +52,15 @@ func (r *Runner) InitChild(id string) error {
 		return fmt.Errorf("failed to unmarshall bundle into OCI spec: %w", err)
 	}
 
-	absRootFsPath := filepath.Join("/home/ubuntu/busybox-bundle", spec.Root.Path)
+	bundlePathFile := filepath.Join(containerStatePath, constants.BundlePathFileName)
+	bundlePathBytes, err := os.ReadFile(bundlePathFile)
+	if err != nil {
+		return fmt.Errorf("failed to read bundle path file: %w", err)
+	}
+
+	bundlePath := string(bundlePathBytes)
+
+	absRootFsPath := filepath.Join(bundlePath, spec.Root.Path)
 	logger.Info("Changing root to: %s", absRootFsPath)
 
 	logger.Info("[ROOTLESS LIMITATION] Filesystem isolation not available - changing working dir only")
