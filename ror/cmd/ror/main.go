@@ -52,6 +52,7 @@ func main() {
 			newCreateCmd(runner),
 			newStartCmd(runner),
 			newDeleteCmd(runner),
+			newListCmd(runner),
 		},
 	}
 
