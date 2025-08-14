@@ -40,6 +40,16 @@ func (r *Runner) CreateContainer(cfg types.ContainerConfig) error {
 		return fmt.Errorf("failed to write config to state directory: %w", err)
 	}
 
+	absBundlePath, err := filepath.Abs(cfg.Bundle)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for bundle: %w", err)
+	}
+
+	bundlePathFile := filepath.Join(containerStatePath, constants.BundlePathFileName)
+	if err := os.WriteFile(bundlePathFile, []byte(absBundlePath), constants.DefaultFilePermissions); err != nil {
+		return fmt.Errorf("failed to write bundle path file: %w", err)
+	}
+
 	logger.Info("Creating container {id: %s, bundle: %s, pidFile: %s}\n", cfg.ID, cfg.Bundle, cfg.PIDFile)
 	return nil
 }
