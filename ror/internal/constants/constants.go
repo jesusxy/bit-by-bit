@@ -1,8 +1,9 @@
 package constants
 
 const (
-	PIDFileName    = "pid"
-	ConfigFileName = "config.json"
+	PIDFileName        = "pid"
+	ConfigFileName     = "config.json"
+	BundlePathFileName = "bundle.path"
 
 	// default paths and values
 	DefaultBundlePath = "."
