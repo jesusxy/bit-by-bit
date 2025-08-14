@@ -15,6 +15,11 @@ It demonstrates how to build a container runtime that can launch a container wit
 
 ---
 
+### Demo
+![ror-demo2](https://github.com/user-attachments/assets/a31983f0-e877-4960-ac7d-25c91c5808ed)
+
+---
+
 ### How It Works
 
 The runtime is built around a parent/child process model:
