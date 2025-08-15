@@ -11,7 +11,7 @@ It demonstrates how to build a container runtime that can launch a container wit
 * **OCI Bundle Compliant:** Runs containers from standard OCI-compliant filesystem bundles.
 * **Rootless Execution:** Utilizes **User Namespaces** and external helpers (`newuidmap`/`newgidmap`) to map an unprivileged host user to the container's root user.
 * **Process & Hostname Isolation:** Creates new **PID** and **UTS** namespaces to give the container its own process tree and hostname identity.
-* **Basic Container Lifecycle:** Supports a complete `create`, `start`, and `delete` workflow for managing containers.
+* **Basic Container Lifecycle:** Supports a complete `create`, `start`, `list` and `delete` workflow for managing containers.
 
 ---
 
