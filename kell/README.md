@@ -14,9 +14,9 @@ This project is an experiment in understanding the core reconciliation loop and 
 
 ## DEMO
 
-[![Kell Operator Demo Screenshot](./demo/kell.png)](./demo/kell.mp4)
+[![Kell Operator Demo Screenshot](./demo/kell.png)](./demo/small_demo.mp4)
 
-**[Click here to watch a full video demo...](./demo/kell.mp4)**
+**[Click here to watch a full video demo...](./demo/small_demo.mp4)**
 
 ## Getting Started
 
