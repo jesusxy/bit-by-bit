@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"log/slog"
 	"nox/internal/model"
 	"os"
 	"regexp"
@@ -78,7 +79,7 @@ func ReadFile(fpath string) ([]model.Event, error) {
 		if err == model.ErrIgnoredLine {
 			continue
 		} else if err != nil {
-			log.Printf("could not parse line: %v", err)
+			slog.Error("Failed to parse log line", "error", err)
 			continue
 		}
 
@@ -100,7 +101,7 @@ func TailFile(fpath string, ch chan<- model.Event) {
 		if err == model.ErrIgnoredLine {
 			continue
 		} else if err != nil {
-			log.Printf("error parsing line: %v", err)
+			slog.Error("failed to parse line", "error", err)
 			continue
 		}
 

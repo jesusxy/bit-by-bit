@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"nox/internal/ingester"
 	"nox/internal/model"
@@ -22,7 +22,7 @@ func main() {
 	stateManager := rules.NewStateManager()
 
 	go ingester.TailFile("testdata/auth.log", eventChannel)
-	log.Println("Nox IDS engine started. Tailing log file...")
+	slog.Info("Nox IDS engine started", "version", "0.1.0")
 
 	for event := range eventChannel {
 		ip := net.ParseIP(event.Source)
@@ -36,7 +36,11 @@ func main() {
 		triggeredAlerts := rules.EvaluateEvent(event, stateManager)
 
 		for _, alert := range triggeredAlerts {
-			fmt.Printf("ALERT: [%s] %s\n", alert.RuleName, alert.Message)
+			slog.Warn("Alert triggered",
+				"rule_name", alert.RuleName,
+				"message", alert.Message,
+				"source_ip", event.Source,
+			)
 		}
 	}
 }
