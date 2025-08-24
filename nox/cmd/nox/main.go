@@ -10,7 +10,7 @@ import (
 func main() {
 	stateManager := rules.NewStateManager()
 
-	events, err := ingester.ReadFile("path/to/your_log") // how do i create fake logs or is there an api i can use?
+	events, err := ingester.ReadFile("testdata/auth.log") // how do i create fake logs or is there an api i can use?
 	if err != nil {
 		log.Printf("failed to read file %w\n", err)
 	}
