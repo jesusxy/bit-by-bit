@@ -12,6 +12,9 @@ import (
 	"github.com/hpcloud/tail"
 )
 
+// Example Logs:
+// Aug 24 13:30:00 my-server sshd[8888]: Accepted password for jsmith from 192.168.1.50 port 12345 ssh2
+
 type logParser struct {
 	EventType string
 	Regex     *regexp.Regexp
@@ -26,6 +29,18 @@ var parsers = []logParser{
 			return model.Event{
 				Timestamp: time.Now().UTC(),
 				EventType: "SSHD_Failed_Password",
+				Source:    matches[2],
+				Metadata:  map[string]string{"user": matches[1]},
+			}, nil
+		},
+	},
+	{
+		EventType: "SSHD_Accepted_Password",
+		Regex:     regexp.MustCompile(`Accepted password for (\S+) from ([\d\.]+) port \d+ ssh2`),
+		Builder: func(matches []string) (model.Event, error) {
+			return model.Event{
+				Timestamp: time.Now().UTC(),
+				EventType: "SSHD_Accepted_Password",
 				Source:    matches[2],
 				Metadata:  map[string]string{"user": matches[1]},
 			}, nil

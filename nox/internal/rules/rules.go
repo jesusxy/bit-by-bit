@@ -14,12 +14,13 @@ type StateManager struct {
 	// Tracks failed login attempts. Key: IP Address, Value: List of timestamps.
 	FailedLoginAttempts map[string][]time.Time
 	// we can add more state maps here for future rules, e.g.:
-	// UserLoginLocations map[string]map[string]bool // Key: Username, Value: Set of countries
+	UserLoginLocations map[string]map[string]bool // Key: Username, Value: Set of country codes
 }
 
 func NewStateManager() *StateManager {
 	return &StateManager{
 		FailedLoginAttempts: make(map[string][]time.Time),
+		UserLoginLocations:  make(map[string]map[string]bool),
 	}
 }
 
@@ -59,9 +60,42 @@ func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
 	return nil // no alert
 }
 
+func checkNewCountryLogins(event model.Event, state *StateManager) *model.Alert {
+	if event.EventType != "SSHD_Accepted_Password" {
+		return nil
+	}
+
+	user := event.Metadata["user"]
+	country, ok := event.Metadata["country"]
+	if !ok || user == "" {
+		return nil // cant evaluate without user and country
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	// check if user has a record of locations
+	if _, ok := state.UserLoginLocations[user]; !ok {
+		state.UserLoginLocations[user] = make(map[string]bool)
+	}
+
+	// check if country is new for user
+	if !state.UserLoginLocations[user][country] {
+		// new location, trigger alert
+		state.UserLoginLocations[user][country] = true
+		return &model.Alert{
+			RuleName: "NewCountryLogin",
+			Message:  fmt.Sprintf("User '%s' logged in from a new country: %s (IP: %s)", user, country, event.Source),
+		}
+	}
+
+	return nil
+}
+
 // activeRules is the registry of all rules the engine will run.
 var activeRules = []Rule{
 	checkFailedLogins,
+	checkNewCountryLogins,
 }
 
 func EvaluateEvent(evt model.Event, state *StateManager) []model.Alert {
