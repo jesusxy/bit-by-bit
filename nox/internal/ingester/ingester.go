@@ -8,6 +8,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/hpcloud/tail"
 )
 
 type logParser struct {
@@ -69,4 +71,24 @@ func ReadFile(fpath string) ([]model.Event, error) {
 	}
 
 	return events, nil
+}
+
+func TailFile(fpath string, ch chan<- model.Event) {
+	t, err := tail.TailFile(fpath, tail.Config{Follow: true, ReOpen: true})
+	if err != nil {
+		log.Fatalf("failed to tail file: %v", err)
+	}
+
+	for line := range t.Lines {
+		event, err := ParseLog(line.Text)
+
+		if err == model.ErrIgnoredLine {
+			continue
+		} else if err != nil {
+			log.Printf("error parsing line: %v", err)
+			continue
+		}
+
+		ch <- event
+	}
 }
