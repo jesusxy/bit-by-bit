@@ -51,13 +51,13 @@ make run
 In a new terminal, create a YAML file for your website (e.g `my-first-website`)
 
 ```yaml
-apiVersion: [webapp.com/v1alpha1](https://webapp.com/v1alpha1)
+apiVersion: v1alpha1
 kind: StaticWebsite
 metadata:
   name: my-first-website
 spec:
   # Any public git repo with an index.html will work
-  gitRepo: "[https://github.com/mdn/beginner-html-site-styled.git](https://github.com/mdn/beginner-html-site-styled.git)"
+  gitRepo: "https://github.com/mdn/beginner-html-site-styled.git"
   replicas: 2
 ```
 
