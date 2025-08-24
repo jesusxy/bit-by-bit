@@ -12,3 +12,6 @@ Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10
 Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
 Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
 Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
+Aug 24 14:00:00 my-server sshd[1111]: Accepted password for jsmith from 8.8.8.8 port 12345 ssh2
+Aug 24 14:01:00 my-server sshd[2222]: Accepted password for jsmith from 8.8.4.4 port 12345 ssh2
+Aug 24 14:02:00 my-server sshd[3333]: Accepted password for jsmith from 193.99.144.80 port 12345 ssh2
