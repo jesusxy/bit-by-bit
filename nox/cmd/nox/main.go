@@ -12,7 +12,7 @@ func main() {
 
 	events, err := ingester.ReadFile("testdata/auth.log") // how do i create fake logs or is there an api i can use?
 	if err != nil {
-		log.Printf("failed to read file %w\n", err)
+		log.Printf("failed to read file %v\n", err)
 	}
 
 	for _, event := range events {
