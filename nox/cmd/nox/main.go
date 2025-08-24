@@ -4,18 +4,18 @@ import (
 	"fmt"
 	"log"
 	"nox/internal/ingester"
+	"nox/internal/model"
 	"nox/internal/rules"
 )
 
 func main() {
+	eventChannel := make(chan model.Event, 100) // channel that holds 100 events
 	stateManager := rules.NewStateManager()
 
-	events, err := ingester.ReadFile("testdata/auth.log") // how do i create fake logs or is there an api i can use?
-	if err != nil {
-		log.Printf("failed to read file %v\n", err)
-	}
+	go ingester.TailFile("testdata/auth.log", eventChannel)
+	log.Println("Nox IDS engine started. Tailing log file...")
 
-	for _, event := range events {
+	for event := range eventChannel {
 		triggeredAlerts := rules.EvaluateEvent(event, stateManager)
 
 		for _, alert := range triggeredAlerts {
