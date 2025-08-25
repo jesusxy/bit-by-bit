@@ -1,12 +1,9 @@
 package ingester
 
 import (
-	"bufio"
-	"fmt"
 	"log"
 	"log/slog"
 	"nox/internal/model"
-	"os"
 	"regexp"
 	"time"
 
@@ -15,6 +12,7 @@ import (
 
 // Example Logs:
 // Aug 24 13:30:00 my-server sshd[8888]: Accepted password for jsmith from 192.168.1.50 port 12345 ssh2
+// type=EXECVE msg=audit(1692889800.123:1): argc=3 a0="ls" a1="-la" a2="/tmp" pid=1234 ppid=567 auid=0 uid=0 gid=0
 
 type logParser struct {
 	EventType string
@@ -47,6 +45,22 @@ var parsers = []logParser{
 			}, nil
 		},
 	},
+	{
+		EventType: "Process_Executed",
+		Regex:     regexp.MustCompile(`\d{2}:\d{2}:\d{2}\s+(\S+)\s+(\d+)\s+.*\s+0\s+(.*)`),
+		Builder: func(matches []string) (model.Event, error) {
+			return model.Event{
+				Timestamp: time.Now().UTC(),
+				EventType: "Process_Executed",
+				Source:    "localhost",
+				Metadata: map[string]string{
+					"process_name": matches[1],
+					"pid":          matches[2],
+					"command":      matches[3],
+				},
+			}, nil
+		},
+	},
 }
 
 func ParseLog(logln string) (model.Event, error) {
@@ -61,50 +75,32 @@ func ParseLog(logln string) (model.Event, error) {
 	return model.Event{}, model.ErrIgnoredLine
 }
 
-func ReadFile(fpath string) ([]model.Event, error) {
-	// open the file
-	f, err := os.Open(fpath)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file from: %s:%w", fpath, err)
-	}
-	defer f.Close()
-
-	var events []model.Event
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		logLine := scanner.Text()
-
-		event, err := ParseLog(logLine)
-		if err == model.ErrIgnoredLine {
-			continue
-		} else if err != nil {
-			slog.Error("Failed to parse log line", "error", err)
-			continue
-		}
-
-		events = append(events, event)
-	}
-
-	return events, nil
-}
-
 func TailFile(fpath string, ch chan<- model.Event) {
-	t, err := tail.TailFile(fpath, tail.Config{Follow: true, ReOpen: true})
+	t, err := tail.TailFile(fpath, tail.Config{Follow: true, ReOpen: true, Logger: tail.DiscardingLogger})
 	if err != nil {
 		log.Fatalf("failed to tail file: %v", err)
 	}
 
+	slog.Info("Started tailling log file", "path", fpath)
+
 	for line := range t.Lines {
+		if line.Text == "" {
+			continue // skip empty lines
+		}
+
 		event, err := ParseLog(line.Text)
 
 		if err == model.ErrIgnoredLine {
+
 			continue
 		} else if err != nil {
-			slog.Error("failed to parse line", "error", err)
+			slog.Error("failed to parse line", "error", err, "line", line.Text)
 			continue
 		}
 
+		slog.Debug("Parsed event", "type", event.EventType, "source", event.Source)
 		ch <- event
 	}
+
+	slog.Warn("Log file tailing stopped", "path", fpath)
 }
