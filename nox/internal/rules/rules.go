@@ -3,6 +3,7 @@ package rules
 import (
 	"fmt"
 	"nox/internal/model"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,12 +16,27 @@ type StateManager struct {
 	FailedLoginAttempts map[string][]time.Time
 	// we can add more state maps here for future rules, e.g.:
 	UserLoginLocations map[string]map[string]bool // Key: Username, Value: Set of country codes
+	// Track process execution patterns for behavioral analysis
+	ProcessExecutionHistory map[string][]ProcessExecution
+	// Track suspicious command frequency per source
+	SuspiciousCommandCount map[string]int
+}
+
+type ProcessExecution struct {
+	Timestamp   time.Time
+	ProcessName string
+	Command     string
+	PID         string
+	PPID        string
+	UID         string
 }
 
 func NewStateManager() *StateManager {
 	return &StateManager{
-		FailedLoginAttempts: make(map[string][]time.Time),
-		UserLoginLocations:  make(map[string]map[string]bool),
+		FailedLoginAttempts:     make(map[string][]time.Time),
+		UserLoginLocations:      make(map[string]map[string]bool),
+		ProcessExecutionHistory: make(map[string][]ProcessExecution),
+		SuspiciousCommandCount:  make(map[string]int),
 	}
 }
 
@@ -52,8 +68,15 @@ func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
 
 	if len(recentAttempts) >= threshold {
 		return &model.Alert{
-			RuleName: "TooManyFailedLogins",
-			Message:  fmt.Sprintf("Detected %d failed SSH logins from %s in the last minute.", len(recentAttempts), ip),
+			RuleName:  "TooManyFailedLogins",
+			Message:   fmt.Sprintf("Detected %d failed SSH logins from %s in the last minute.", len(recentAttempts), ip),
+			Severity:  "HIGH",
+			Timestamp: event.Timestamp,
+			Source:    ip,
+			Metadata: map[string]string{
+				"attempt_count": fmt.Sprintf("%d", len(recentAttempts)),
+				"time_window":   window.String(),
+			},
 		}
 	}
 
@@ -84,8 +107,171 @@ func checkNewCountryLogins(event model.Event, state *StateManager) *model.Alert 
 		// new location, trigger alert
 		state.UserLoginLocations[user][country] = true
 		return &model.Alert{
-			RuleName: "NewCountryLogin",
-			Message:  fmt.Sprintf("User '%s' logged in from a new country: %s (IP: %s)", user, country, event.Source),
+			RuleName:  "NewCountryLogin",
+			Message:   fmt.Sprintf("User '%s' logged in from a new country: %s (IP: %s)", user, country, event.Source),
+			Severity:  "MEDIUM",
+			Timestamp: event.Timestamp,
+			Source:    event.Source,
+			Metadata: map[string]string{
+				"user":    user,
+				"country": country,
+			},
+		}
+	}
+
+	return nil
+}
+
+var suspiciousCommands = map[string]string{
+	"nmap":       "network_scanning",
+	"nc":         "network_tool",
+	"netcat":     "network_tool",
+	"useradd":    "user_management",
+	"usermod":    "user_management",
+	"userdel":    "user_management",
+	"bash -i":    "reverse_shell",
+	"sh -i":      "reverse_shell",
+	"chmod 777":  "permission_escalation",
+	"chmod +s":   "permission_escalation",
+	"wget":       "file_download",
+	"curl":       "file_download",
+	"base64 -d":  "obfuscation",
+	"python -c":  "script_execution",
+	"perl -e":    "script_execution",
+	"crontab":    "persistence",
+	"history -c": "anti_forensics",
+	"dd if=":     "disk_access",
+	"/dev/tcp/":  "network_connection",
+}
+
+func checkSuspiciousCommands(event model.Event, state *StateManager) *model.Alert {
+	if event.EventType != "Process_Executed" {
+		return nil
+	}
+
+	command, ok := event.Metadata["command"]
+	if !ok {
+		return nil
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	processExec := ProcessExecution{
+		Timestamp:   event.Timestamp,
+		ProcessName: event.Metadata["process_name"],
+		Command:     command,
+		PID:         event.Metadata["pid"],
+		PPID:        event.Metadata["ppid"],
+		UID:         event.Metadata["uid"],
+	}
+
+	source := event.Source
+	state.ProcessExecutionHistory[source] = append(state.ProcessExecutionHistory[source], processExec)
+
+	for suspiciousCmd, category := range suspiciousCommands {
+		if strings.Contains(strings.ToLower(command), strings.ToLower(suspiciousCmd)) {
+			state.SuspiciousCommandCount[source]++
+
+			severity := "MEDIUM"
+			if category == "reverse_shell" || category == "permission_escalation" {
+				severity = "HIGH"
+			}
+
+			return &model.Alert{
+				RuleName:  "SuspiciousCommandExecution",
+				Message:   fmt.Sprintf("A suspicious command was executed: '%s'", command),
+				Severity:  severity,
+				Timestamp: event.Timestamp,
+				Source:    source,
+				Metadata: map[string]string{
+					"command":      command,
+					"category":     category,
+					"process_name": event.Metadata["process_name"],
+					"pid":          event.Metadata["pid"],
+					"uid":          event.Metadata["uid"],
+				},
+			}
+		}
+	}
+	return nil
+}
+
+func checkRapidProcessExecution(event model.Event, state *StateManager) *model.Alert {
+	if event.EventType != "Process_Executed" {
+		return nil
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	source := event.Source
+	const (
+		threshold = 10
+		window    = 30 * time.Second
+	)
+
+	history := state.ProcessExecutionHistory[source]
+	if len(history) == 0 {
+		return nil
+	}
+
+	cutoff := event.Timestamp.Add(-window)
+	recentCount := 0
+	for _, proc := range history {
+		if proc.Timestamp.After(cutoff) {
+			recentCount++
+		}
+	}
+
+	if recentCount >= threshold {
+		return &model.Alert{
+			RuleName:  "RapidProcessExecution",
+			Message:   fmt.Sprintf("Detected %d processes executed in %s from %s", recentCount, window, source),
+			Severity:  "MEDIUM",
+			Timestamp: event.Timestamp,
+			Source:    source,
+			Metadata: map[string]string{
+				"process_count": fmt.Sprintf("%d", recentCount),
+				"time_window":   window.String(),
+			},
+		}
+	}
+
+	return nil
+}
+
+func checkPrivilegedEscalation(event model.Event, state *StateManager) *model.Alert {
+	if event.EventType != "Process_Executed" {
+		return nil
+	}
+
+	command := event.Metadata["command"]
+	uid := event.Metadata["uid"]
+	ppid := event.Metadata["ppid"]
+
+	privEscPatterns := []string{
+		"sudo su",
+		"su -",
+		"sudo -i",
+		"sudo bash",
+		"sudo sh",
+	}
+
+	for _, pattern := range privEscPatterns {
+		if strings.Contains(strings.ToLower(command), pattern) {
+			return &model.Alert{
+				RuleName:  "PrivilegeEscalationAttempt",
+				Message:   fmt.Sprintf("Potential privilege escalation detected: '%s' (UID: %s, PPID: %s)", command, uid, ppid),
+				Severity:  "HIGH",
+				Timestamp: event.Timestamp,
+				Source:    event.Source,
+				Metadata: map[string]string{
+					"command": command,
+					"uid":     uid,
+					"ppid":    ppid,
+				},
+			}
 		}
 	}
 
@@ -96,6 +282,9 @@ func checkNewCountryLogins(event model.Event, state *StateManager) *model.Alert 
 var activeRules = []Rule{
 	checkFailedLogins,
 	checkNewCountryLogins,
+	checkSuspiciousCommands,
+	checkRapidProcessExecution,
+	checkPrivilegedEscalation,
 }
 
 func EvaluateEvent(evt model.Event, state *StateManager) []model.Alert {
