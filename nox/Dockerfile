@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /nox ./cmd/nox/main.go
 # --- Final Stage ---
 
 # use a minimal, non-root image for the final product
-FROM gcr.io/distroless/static-debian11
+FROM alpine:latest 
 
 # set working directory
 WORKDIR /app
@@ -28,5 +28,6 @@ COPY --from=builder /nox /nox
 # copy geo ip db so the app can access
 COPY testdata/GeoLite2-City.mmdb ./testdata/GeoLite2-City.mmdb
 
-# cmd to run app once the container starts
-CMD ["/nox"]
+COPY entrypoint.sh /entrypoint.sh
+
+ENTRYPOINT [ "/entrypoint.sh" ]
