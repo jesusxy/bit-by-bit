@@ -1,0 +1,19 @@
+services:
+  nox:
+    build: .
+    volumes:
+      - audit-logs:/var/log/audit
+    depends_on:
+      - endpoint
+  
+  endpoint:
+    build: ./endpoint
+    cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_WRITE
+    volumes:
+      - audit-logs:/var/log/audit
+    command: /bin/sh -c "sleep infinity"
+
+volumes:
+  audit-logs:
