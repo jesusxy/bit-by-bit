@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"nox/internal/ingester"
 	"nox/internal/model"
@@ -29,6 +30,47 @@ var (
 		Name: "nox_alerts_triggered_total",
 		Help: "Total number of alerts triggered.",
 	}, []string{"rule_name"})
+
+	alertsBySeverityTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "nox_alerts_by_severity_total",
+		Help: "Total number of alerts by severity",
+	}, []string{"severity"})
+
+	// eventsByTypeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+	// 	Name: "nox_events_by_type_total",
+	// 	Help: "Total number of events by type",
+	// }, []string{"event_type"})
+
+	// eventProcessingDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	// 	Name:    "nox_even_processing_duration_seconds",
+	// 	Help:    "Time spent processing events",
+	// 	Buckets: prometheus.DefBuckets,
+	// }, []string{"event_type"})
+
+	// geoIpLookupsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+	// 	Name: "nox_goeip_lookups_total",
+	// 	Help: "Total number of geo lookups",
+	// }, []string{"status"}) // success, failure, skipped
+
+	// alertChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
+	// 	Name: "nox_alert_channel_size",
+	// 	Help: "Current size of alert channel buffer",
+	// })
+
+	// eventChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
+	// 	Name: "nox_event_channel_size",
+	// 	Help: "Current size of event channel buffer",
+	// })
+
+	// activeFailedLoginAttempts = prometheus.NewGauge(prometheus.GaugeOpts{
+	// 	Name: "nox_active_failed_login_attempts",
+	// 	Help: "Current number of active failed login attempt trackers",
+	// })
+
+	// activeUserLoginLocations = prometheus.NewGauge(prometheus.GaugeOpts{
+	// 	Name: "nox_active_user_login_locations",
+	// 	Help: "Current number of tracked user login locations",
+	// })
 )
 
 func init() {
@@ -101,6 +143,39 @@ func main() {
 func processEvent(event model.Event, db *geoip2.Reader, stateManager *rules.StateManager, alertChannel chan<- model.Alert) {
 	eventsProcessedTotal.Inc()
 
+	if event.Source != "localhost" && event.Source != "" {
+		ip := net.ParseIP(event.Source)
+		if ip != nil && !ip.IsPrivate() {
+			if record, err := db.City(ip); err == nil {
+				if event.Metadata == nil {
+					event.Metadata = make(map[string]string)
+				}
+
+				// add geographic metadata
+				event.Metadata["country"] = record.Country.IsoCode
+				event.Metadata["country_name"] = record.Country.Names["en"]
+				if len(record.City.Names) > 0 {
+					event.Metadata["city"] = record.City.Names["en"]
+				}
+
+				// add coordinates for geographic analysis
+				if record.Location.Latitude != 0 && record.Location.Longitude != 0 {
+					event.Metadata["latitude"] = fmt.Sprintf("%.4f", record.Location.Latitude)
+					event.Metadata["longitude"] = fmt.Sprintf("%.4f", record.Location.Longitude)
+				}
+
+			} else {
+				slog.Debug("GeoIP lookup failed", "ip", event.Source, "error", err)
+			}
+		}
+	}
+
+	slog.Debug("Processing Event",
+		"type", event.EventType,
+		"source", event.Source,
+		"timestamp", event.Timestamp,
+	)
+
 	triggeredAlerts := rules.EvaluateEvent(event, stateManager)
 
 	for _, alert := range triggeredAlerts {
@@ -116,7 +191,54 @@ func processEvent(event model.Event, db *geoip2.Reader, stateManager *rules.Stat
 	}
 }
 
-func handleAlerts(alertChan <-chan model.Alert) {}
+func handleAlerts(alertChan <-chan model.Alert) {
+	for alert := range alertChan {
+		alertsTriggeredTotal.WithLabelValues(alert.RuleName).Inc()
+		alertsBySeverityTotal.WithLabelValues(alert.Severity).Inc()
+
+		logLevel := slog.LevelWarn
+		switch alert.Severity {
+		case "CRITICAL":
+			logLevel = slog.LevelError
+		case "HIGH":
+			logLevel = slog.LevelWarn
+		case "MEDIUM":
+			logLevel = slog.LevelInfo
+		case "LOW":
+			logLevel = slog.LevelDebug
+		}
+
+		logger := slog.With(
+			"alert_id", generateAlertID(alert),
+			"rule_name", alert.RuleName,
+			"severity", logLevel,
+			"source", alert.Source,
+			"timestamp", alert.Timestamp,
+		)
+
+		for key, value := range alert.Metadata {
+			logger = logger.With(key, value)
+		}
+
+		logger.Log(context.Background(), logLevel, alert.Message)
+
+		// Here you could add additional alert handling:
+		// - Send to SIEM
+		// - Send to Slack/Discord webhook
+		// - Write to database
+		// - Send email notifications for high-severity alerts
+
+		if alert.IsHighPriority() {
+			slog.Error("HIGH PRIORITY ALERT",
+				"rule_name", alert.RuleName,
+				"message", alert.Message,
+				"severity", alert.Severity,
+			)
+
+			// could trigger immediate notifications here
+		}
+	}
+}
 
 func generateAlertID(alert model.Alert) string {
 	return fmt.Sprintf("%s-%d-%s",
