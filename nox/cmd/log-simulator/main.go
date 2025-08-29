@@ -56,27 +56,6 @@ func main() {
 			logLine = fmt.Sprintf(acceptedLoginTemplate, timestamp, pid, user, ip, port)
 			fmt.Print("Injecting: Successful login for jsmith")
 			appendLog(logLine)
-		case 2:
-			// Scenario : Impossible travel attempt for jsmith
-			user := "jsmith"
-			ip := "193.99.144.80"
-			logLine = fmt.Sprintf(acceptedLoginTemplate, timestamp, pid, user, ip, port)
-			fmt.Print("Injecting: Impossible travel event for jsmith")
-			appendLog(logLine)
-		case 3:
-			// brute force attack simulation
-			attackIP := fmt.Sprintf("198.51.100.%d", rand.Intn(254)+1)
-			user := "admin"
-			fmt.Printf("Injecting: Brute-force attack from %s", attackIP)
-
-			for i := 0; i < 6; i++ {
-				ts := time.Now().Format("Jan  2 15:04:05")
-				p := rand.Intn(9000) + 1000
-				logLine = fmt.Sprintf(failedLoginTemplate, ts, p, user, attackIP, port)
-				appendLog(logLine)
-				time.Sleep(500 * time.Millisecond)
-			}
-
 		}
 
 		fmt.Println(" -> Done")
