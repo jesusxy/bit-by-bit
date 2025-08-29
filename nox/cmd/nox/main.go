@@ -100,12 +100,12 @@ func main() {
 
 	// start background services
 	go startMetricsServer(ctx)
-	go ingester.TailFile("/var/log/audit/audit.log", eventChannel)
+	go ingester.TailFile("/var/log/nox/audit.log", eventChannel)
 	go handleAlerts(alertChannel)
 
 	slog.Info("Nox IDS engine started",
 		"version", "0.1.0",
-		"log_file", "/var/log/audit/audit.log",
+		"log_file", "/var/log/nox/audit.log",
 		"buffer_size", 1000,
 	)
 

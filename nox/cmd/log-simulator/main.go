@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	logFile               = "testdata/auth.log"
+	logFile               = "var/log/audit/audit.log"
 	failedLoginTemplate   = "%s my-server ssh[%d]: Failed password for %s from %s port %d ssh2\n"
 	acceptedLoginTemplate = "%s my-server sshd[%d]: Accepted password for %s from %s port %d ssh2\n"
 )
