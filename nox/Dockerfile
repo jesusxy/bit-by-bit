@@ -28,6 +28,4 @@ COPY --from=builder /nox /nox
 # copy geo ip db so the app can access
 COPY testdata/GeoLite2-City.mmdb ./testdata/GeoLite2-City.mmdb
 
-COPY entrypoint.sh /entrypoint.sh
-
-ENTRYPOINT [ "/entrypoint.sh" ]
+CMD [ "/nox" ]
