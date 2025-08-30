@@ -13,3 +13,25 @@ Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10
 Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
 Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
 
+22:54:39 nmap             22775   15981   0   /usr/bin/nmap -p 1-65535 localhost
+22:54:40 nmap             75369   53560   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 22:54:42 my-server sshd[2927]: Accepted password for jsmith from 8.8.8.8 port 20573 ssh2
+Aug  29 22:54:45 my-server sshd[7576]: Accepted password for jsmith from 8.8.8.8 port 59802 ssh2
+22:54:47 nmap             59894   10625   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 22:54:49 my-server sshd[3200]: Accepted password for jsmith from 8.8.8.8 port 16915 ssh2
+22:54:50 nmap             90815   68807   0   /usr/bin/nmap -p 1-65535 localhost
+23:00:10 nmap             62119   8944    0   /usr/bin/nmap -p 1-65535 localhost
+23:00:11 nmap             73119   80873   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 23:00:13 my-server sshd[7733]: Failed password for admin from 10.10.10.87 port 23928 ssh2
+23:00:16 nmap             75781   81564   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 23:00:18 my-server sshd[3465]: Failed password for admin from 10.10.10.227 port 10636 ssh2
+23:00:19 nmap             72326   44891   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 23:00:22 my-server sshd[8469]: Accepted password for jsmith from 8.8.8.8 port 21698 ssh2
+23:00:23 nmap             72415   35155   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 23:00:26 my-server sshd[1722]: Failed password for admin from 10.10.10.5 port 44962 ssh2
+Aug  29 23:00:29 my-server sshd[7940]: Accepted password for jsmith from 8.8.8.8 port 55761 ssh2
+Aug  29 23:00:32 my-server sshd[1899]: Failed password for admin from 10.10.10.187 port 1597 ssh2
+Aug  29 23:00:33 my-server sshd[1479]: Accepted password for jsmith from 8.8.8.8 port 47891 ssh2
+23:00:35 nmap             19901   65528   0   /usr/bin/nmap -p 1-65535 localhost
+Aug  29 23:00:37 my-server sshd[9976]: Accepted password for jsmith from 8.8.8.8 port 12863 ssh2
+23:00:39 nmap             63590   1202    0   /usr/bin/nmap -p 1-65535 localhost
