@@ -15,6 +15,12 @@ import (
 // Example Logs:
 // Aug 24 13:30:00 my-server sshd[8888]: Accepted password for jsmith from 192.168.1.50 port 12345 ssh2
 // type=EXECVE msg=audit(1692889800.123:1): argc=3 a0="ls" a1="-la" a2="/tmp" pid=1234 ppid=567 auid=0 uid=0 gid=0
+/** execsnoop output format
+TIME(s)  PID    PPID   RET ARGS
+0.000    1234   567    0   /bin/ls -la /tmp
+1.245    1235   567    0   /usr/bin/whoami
+2.891    1236   567    0   /bin/ps aux
+*/
 
 type SimpleBuilder func(matches []string) (model.Event, error)
 type AuditBuilder func(matches []string, auditLine string) (model.Event, error)
@@ -53,33 +59,26 @@ var parsers = []logParser{
 	},
 	{
 		EventType: "Process_Executed",
-		Regex:     regexp.MustCompile(`type=EXECVE msg=audit\(([0-9.]+):\d+\):(.*?)pid=(\d+) ppid=(\d+).*?uid=(\d+) gid=(\d+)`),
-		AuditBuilder: func(matches []string, auditLine string) (model.Event, error) {
-			timestampFloat, err := strconv.ParseFloat(matches[1], 64)
-			if err != nil {
-				timestampFloat = float64(time.Now().Unix())
-			}
-			timestamp := time.Unix(int64(timestampFloat), int64((timestampFloat-float64(int64(timestampFloat)))*1e9))
+		Regex:     regexp.MustCompile(`^\s*(\d+\.\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*?)$`),
+		SimpleBuilder: func(matches []string) (model.Event, error) {
+			// matches[1]: timestamp (seconds)
+			// matches[2]: PID
+			// matches[3]: PPID
+			// matches[4]: return code
+			// matches[5]: command with args
 
-			command, args := extractCommandFromAudit(auditLine)
-			fullCommand := command
-
-			if len(args) > 0 {
-				fullCommand = command + " " + strings.Join(args, " ")
-			}
+			command := strings.Fields(matches[5])[0]
 
 			return model.Event{
-				Timestamp: timestamp,
+				Timestamp: time.Now().UTC(),
 				EventType: "Process_Executed",
 				Source:    "localhost",
 				Metadata: map[string]string{
+					"pid":          matches[2],
+					"ppid":         matches[3],
+					"return_code":  matches[4],
+					"command":      matches[5],
 					"process_name": command,
-					"pid":          matches[3],
-					"ppid":         matches[4],
-					"uid":          matches[5],
-					"gid":          matches[6],
-					"command":      fullCommand,
-					"args":         strings.Join(args, " "),
 				},
 			}, nil
 		},
@@ -120,15 +119,15 @@ func extractCommandFromAudit(auditLine string) (command string, args []string) {
 	return command, args
 }
 
-func ParseLog(logln string) (model.Event, error) {
+func ParseLog(logline string) (model.Event, error) {
 	for _, parser := range parsers {
-		matches := parser.Regex.FindStringSubmatch(logln)
+		matches := parser.Regex.FindStringSubmatch(logline)
 
 		if len(matches) > 0 {
 			if parser.SimpleBuilder != nil {
 				return parser.SimpleBuilder(matches)
 			} else if parser.AuditBuilder != nil {
-				return parser.AuditBuilder(matches, logln)
+				return parser.AuditBuilder(matches, logline)
 			}
 		}
 	}
