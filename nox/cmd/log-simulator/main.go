@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	logFile               = "var/log/nox/audit.log"
-	failedLoginTemplate   = "%s my-server ssh[%d]: Failed password for %s from %s port %d ssh2\n"
+	logFile               = "testdata/auth.log"
+	failedLoginTemplate   = "%s my-server sshd[%d]: Failed password for %s from %s port %d ssh2\n"
 	acceptedLoginTemplate = "%s my-server sshd[%d]: Accepted password for %s from %s port %d ssh2\n"
+	execsnoopTemplate     = "%s %-16s %-7d %-7d %-3d %s\n"
 )
 
 func appendLog(message string) {
@@ -31,33 +32,45 @@ func main() {
 	log.Println("Starting log simulator....")
 
 	for {
-		sleepDuration := time.Duration(rand.Intn(4)+1) * time.Second
+		sleepDuration := time.Duration(rand.Intn(3)+1) * time.Second
 		time.Sleep(sleepDuration)
 
-		timestamp := time.Now().Format("Jan  2 15:04:05")
-		pid := rand.Intn(9000) + 1000
-		port := rand.Intn(60000) + 1024
-
 		scenario := rand.Intn(3)
-		var logLine string
+		var logLine, logMessage string
 
 		switch scenario {
 		case 0:
 			// Scenario: A random failed login
+			logMessage = "Injecting: Random failed login"
+			timestamp := time.Now().Format("Jan  2 15:04:05")
+			pid := rand.Intn(9000) + 1000
+			port := rand.Intn(60000) + 1024
 			user := "admin"
 			ip := fmt.Sprintf("10.10.10.%d", rand.Intn(254)+1)
 			logLine = fmt.Sprintf(failedLoginTemplate, timestamp, pid, user, ip, port)
-			fmt.Print("Injecting: Random failed login")
-			appendLog(logLine)
 		case 1:
 			// Scenario: A successful login for test user
+			logMessage = "Injecting: Successful login for jsmith"
+			pid := rand.Intn(9000) + 1000
+			port := rand.Intn(60000) + 1024
 			user := "jsmith"
+			timestamp := time.Now().Format("Jan  2 15:04:05")
 			ip := "8.8.8.8"
 			logLine = fmt.Sprintf(acceptedLoginTemplate, timestamp, pid, user, ip, port)
-			fmt.Print("Injecting: Successful login for jsmith")
-			appendLog(logLine)
+		case 2:
+			logMessage = "Injecting: suspicious execsnoop event"
+			timestamp := time.Now().Format("15:04:05")
+			pid := rand.Intn(90000) + 1000
+			ppid := rand.Intn(90000) + 1000
+			command := "nmap"
+			fullCommand := "/usr/bin/nmap -p 1-65535 localhost"
+			logLine = fmt.Sprintf(execsnoopTemplate, timestamp, command, pid, ppid, 0, fullCommand)
 		}
 
-		fmt.Println(" -> Done")
+		if logLine != "" {
+			fmt.Print(logMessage)
+			appendLog(logLine)
+			fmt.Println(" -> Done")
+		}
 	}
 }
