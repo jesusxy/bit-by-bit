@@ -58,24 +58,26 @@ var parsers = []logParser{
 	},
 	{
 		EventType: "Process_Executed",
-		Regex:     regexp.MustCompile(`^\S+\s+(\S+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$`),
+		Regex:     regexp.MustCompile(`^\S+\s+(\d+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$`),
 		SimpleBuilder: func(matches []string) (model.Event, error) {
-			// matches[1]: timestamp (seconds)
-			// matches[2]: PID
-			// matches[3]: PPID
-			// matches[4]: return code
-			// matches[5]: command with args
+			// matches[1]: UID
+			// matches[2]: process name
+			// matches[3]: PID
+			// matches[4]: PPID
+			// matches[5]: return code
+			// matches[6]: full command
 
 			return model.Event{
 				Timestamp: time.Now().UTC(),
 				EventType: "Process_Executed",
 				Source:    "localhost",
 				Metadata: map[string]string{
-					"process_name": matches[1],
-					"pid":          matches[2],
-					"ppid":         matches[3],
-					"return_code":  matches[4],
-					"command":      matches[5],
+					"uid":          matches[1],
+					"process_name": matches[2],
+					"pid":          matches[3],
+					"ppid":         matches[4],
+					"return_code":  matches[5],
+					"command":      matches[6],
 				},
 			}, nil
 		},
@@ -148,7 +150,7 @@ func TailFile(fpath string, ch chan<- model.Event) {
 		event, err := ParseLog(line.Text)
 
 		if err == model.ErrIgnoredLine {
-
+			slog.Debug("Ignoring log line", "line", line.Text)
 			continue
 		} else if err != nil {
 			slog.Error("failed to parse line", "error", err, "line", line.Text)
