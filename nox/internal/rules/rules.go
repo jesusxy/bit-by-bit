@@ -20,6 +20,7 @@ type StateManager struct {
 	ProcessExecutionHistory map[string][]ProcessExecution
 	// Track suspicious command frequency per source
 	SuspiciousCommandCount map[string]int
+	BruteForceAlertedIPs   map[string]bool
 }
 
 type ProcessExecution struct {
@@ -37,6 +38,7 @@ func NewStateManager() *StateManager {
 		UserLoginLocations:      make(map[string]map[string]bool),
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
 		SuspiciousCommandCount:  make(map[string]int),
+		BruteForceAlertedIPs:    make(map[string]bool),
 	}
 }
 
@@ -44,6 +46,8 @@ func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
 	if event.EventType != "SSHD_Failed_Password" {
 		return nil
 	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
 
 	//--- state logic ----//
 	ip := event.Source
@@ -52,21 +56,26 @@ func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
 		window    = 60 * time.Second
 	)
 
-	attempts := state.FailedLoginAttempts[ip]
-	attempts = append(attempts, event.Timestamp)
-
 	// prune old timestamps that are outside the time window
 	var recentAttempts []time.Time
-	cutoff := time.Now().UTC().Add(-window)
-	for _, t := range attempts {
-		if t.After(cutoff) {
+	now := time.Now().UTC()
+	for _, t := range state.FailedLoginAttempts[ip] {
+		if now.Sub(t) <= window {
 			recentAttempts = append(recentAttempts, t)
 		}
 	}
 
+	// add new attempt
+	recentAttempts = append(recentAttempts, event.Timestamp)
 	state.FailedLoginAttempts[ip] = recentAttempts
 
+	if state.BruteForceAlertedIPs[ip] {
+		return nil
+	}
+
 	if len(recentAttempts) >= threshold {
+		state.BruteForceAlertedIPs[ip] = true
+
 		return &model.Alert{
 			RuleName:  "TooManyFailedLogins",
 			Message:   fmt.Sprintf("Detected %d failed SSH logins from %s in the last minute.", len(recentAttempts), ip),
