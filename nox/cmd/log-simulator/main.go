@@ -88,7 +88,6 @@ func main() {
 				logLine := fmt.Sprintf(failedLoginTemplate, timestamp, pid, "root", attackIP, port)
 				appendAndPrint(logMessage, logLine)
 			}
-
 		case 4:
 			// Single random failed Login
 			logMessage = "Injecting: Random failed login"

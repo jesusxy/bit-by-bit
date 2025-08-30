@@ -197,15 +197,9 @@ func handleAlerts(alertChan <-chan model.Alert) {
 		alertsBySeverityTotal.WithLabelValues(alert.Severity).Inc()
 
 		logLevel := slog.LevelWarn
-		switch alert.Severity {
-		case "CRITICAL":
+
+		if alert.IsHighPriority() {
 			logLevel = slog.LevelError
-		case "HIGH":
-			logLevel = slog.LevelWarn
-		case "MEDIUM":
-			logLevel = slog.LevelInfo
-		case "LOW":
-			logLevel = slog.LevelDebug
 		}
 
 		logger := slog.With(
@@ -222,21 +216,6 @@ func handleAlerts(alertChan <-chan model.Alert) {
 
 		logger.Log(context.Background(), logLevel, alert.Message)
 
-		// Here you could add additional alert handling:
-		// - Send to SIEM
-		// - Send to Slack/Discord webhook
-		// - Write to database
-		// - Send email notifications for high-severity alerts
-
-		if alert.IsHighPriority() {
-			slog.Error("HIGH PRIORITY ALERT",
-				"rule_name", alert.RuleName,
-				"message", alert.Message,
-				"severity", alert.Severity,
-			)
-
-			// could trigger immediate notifications here
-		}
 	}
 }
 
