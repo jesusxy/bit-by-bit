@@ -6,7 +6,6 @@ import (
 	"nox/internal/model"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hpcloud/tail"
@@ -59,7 +58,7 @@ var parsers = []logParser{
 	},
 	{
 		EventType: "Process_Executed",
-		Regex:     regexp.MustCompile(`^\s*(\d+\.\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*?)$`),
+		Regex:     regexp.MustCompile(`^\S+\s+(\S+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$`),
 		SimpleBuilder: func(matches []string) (model.Event, error) {
 			// matches[1]: timestamp (seconds)
 			// matches[2]: PID
@@ -67,18 +66,16 @@ var parsers = []logParser{
 			// matches[4]: return code
 			// matches[5]: command with args
 
-			command := strings.Fields(matches[5])[0]
-
 			return model.Event{
 				Timestamp: time.Now().UTC(),
 				EventType: "Process_Executed",
 				Source:    "localhost",
 				Metadata: map[string]string{
+					"process_name": matches[1],
 					"pid":          matches[2],
 					"ppid":         matches[3],
 					"return_code":  matches[4],
 					"command":      matches[5],
-					"process_name": command,
 				},
 			}, nil
 		},
