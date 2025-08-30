@@ -2,15 +2,4 @@ services:
   nox:
     build: .
     volumes:
-      - audit-logs:/var/log/nox
-    depends_on:
-      - endpoint
-  
-  endpoint:
-    build: ./endpoint 
-    privileged: true
-    volumes:
-      - audit-logs:/var/log/nox
-
-volumes:
-  audit-logs:
+      - ./testdata:/app/testdata
