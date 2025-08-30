@@ -1,0 +1,5 @@
+services:
+  nox:
+    build: .
+    volumes:
+      - ./testdata:/app/testdata

