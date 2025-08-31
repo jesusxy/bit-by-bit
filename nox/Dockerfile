@@ -22,7 +22,7 @@ FROM alpine:latest
 # set working directory
 WORKDIR /app
 
-# copy the compiled binary from the biulder stage
+# copy the compiled binary from the builder stage
 COPY --from=builder /nox /nox
 
 # copy geo ip db so the app can access
