@@ -94,6 +94,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	yamlRules, err := rules.LoadRulesFromFile("rules.yaml")
+	if err != nil {
+		log.Fatalf("could not load detection rules: %v", err)
+	}
+
 	eventChannel := make(chan model.Event, 1000) // channel that holds 100 events
 	alertChannel := make(chan model.Alert, 500)
 	stateManager := rules.NewStateManager()
@@ -124,7 +129,7 @@ func main() {
 					slog.Info("Event channel closed, shutting down event processor")
 					return
 				}
-				processEvent(event, db, stateManager, alertChannel)
+				processEvent(event, yamlRules, db, stateManager, alertChannel)
 			case <-ctx.Done():
 				slog.Info("Context cancelled, shutting down event processor")
 				return
@@ -140,7 +145,7 @@ func main() {
 	slog.Info("Nox IDS engine stopped")
 }
 
-func processEvent(event model.Event, db *geoip2.Reader, stateManager *rules.StateManager, alertChannel chan<- model.Alert) {
+func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip2.Reader, stateManager *rules.StateManager, alertChannel chan<- model.Alert) {
 	eventsProcessedTotal.Inc()
 
 	if event.Source != "localhost" && event.Source != "" {
@@ -176,7 +181,7 @@ func processEvent(event model.Event, db *geoip2.Reader, stateManager *rules.Stat
 		"timestamp", event.Timestamp,
 	)
 
-	triggeredAlerts := rules.EvaluateEvent(event, stateManager)
+	triggeredAlerts := rules.EvaluateEvent(event, yamlRules, stateManager)
 
 	for _, alert := range triggeredAlerts {
 		select {
