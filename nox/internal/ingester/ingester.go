@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"nox/internal/model"
 	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/hpcloud/tail"
@@ -82,40 +81,6 @@ var parsers = []logParser{
 			}, nil
 		},
 	},
-}
-
-func extractCommandFromAudit(auditLine string) (command string, args []string) {
-	argcRegex := regexp.MustCompile(`argc=(\d+)`)
-	argcMatches := argcRegex.FindStringSubmatch(auditLine)
-
-	if len(argcMatches) < 2 {
-		return "", nil
-	}
-
-	argc, err := strconv.Atoi(string(argcMatches[1]))
-	if err != nil {
-		return "", nil
-	}
-
-	var allArgs []string
-	for i := 0; i < argc; i++ {
-		argRegex := regexp.MustCompile(`a` + strconv.Itoa(i) + `="([^"]*)`)
-		argMatches := argRegex.FindStringSubmatch(auditLine)
-		if len(argMatches) >= 2 {
-			allArgs = append(allArgs, argMatches[1])
-		}
-	}
-
-	if len(allArgs) == 0 {
-		return "", nil
-	}
-
-	command = allArgs[0]
-	if len(allArgs) > 1 {
-		args = allArgs[1:]
-	}
-
-	return command, args
 }
 
 func ParseLog(logline string) (model.Event, error) {
