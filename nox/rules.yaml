@@ -1,0 +1,121 @@
+- name: Suspicious Nmap Scan
+  description: "Detects the use of nmap a common network scanning tool."
+  technique_id: T1046
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    # trigger if the process_name is nmap
+    - field: metadata.process_name
+      operator: equals
+      value: "nmap"
+- name: Reverse Shell with Netcat
+  description: "Detects a common pattern for creating a reverse shell using netcat."
+  technique_id: T1059.004
+  severity: HIGH
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.process_name
+      operator: equals
+      value: "nc"
+    - field: metadata.command
+      operator: contains
+      value: "-e /bin/bash"
+- name: User added via command line
+  description: "Detects the creation of a new user via the useradd command."
+  technique_id: T1136.001
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.process_name
+      opearator: equals
+      value: "useradd"
+- name: Interactive Root Shell via Sudo
+  description: "Detects an attempt to spawn an interactive root shell using sudo a common escalation technique."
+  technique_id: T1548.003
+  severity: HIGH
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      operator: contains
+      value: "sudo su"
+- name: Interactive Root Shell via Sudo (Alternate)
+  description: "Detects an attempt to spawn an interactive root shell using 'sudo -i' or 'sudo sh'."
+  technique_id: T1548.003
+  severity: HIGH
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      opearator: contains
+      value: "sudo -i"
+- name: Insecure File Permissions Set
+  description: "Detects chmod 777, which makes a file world-writeable and is often used to prepare payloads."
+  technique_id: T1222.002
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      opearator: contains
+      value: "chmod 777"
+- name: Setuid Bit Set on File
+  description: "Detects chmod +s, which sets the SUID bit, a technique for privilege escalation and persistence."
+  technique_id: T1548.001
+  severity: HIGH
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      opearator: contains
+      value: "chmod +s"
+- name: File Download with Wget
+  description: "Detects file downloads using wget. Often benign, but suspicious if downloading to /tmp or /dev/shm."
+  technique_id: T1105
+  severity: LOW
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.process_name
+      operator: equals
+      value: "wget"
+- name: File Download with Curl
+  description: "Detects file downloads using curl. Often benign, but suspicious if downloading to /tmp or /dev/shm."
+  technique: T1105
+  severity: LOW
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.process_name
+      opearator: equals
+      value: "curl"
+- name: Base64 Decoding
+  description: "Detects decoding of base64 strings, a common technique to obfuscating malicious commands or payloads"
+  technique: T1140
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      opearator: contains
+      value: "base64 -d"
+- name: Python Script Execution from Command line
+  description: "Detects direct execution of Python code from the command line, often used for droppers or exploits"
+  technique_id: T1059.006
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      operator: contains
+      value: "python -c"
+- name: Scheduled Task Creation with Crontab
+  description: "Detects modification of crontab, a primary technique for establishing persistence"
+  technique_id: T1053.003
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.process_name
+      operator: equals
+      value: "crontab"
+- name: Command History Clearing
+  description: "Detects clearing of the bash history, a common anti-forensics technique to hide activity."
+  technique_id: T1070.003
+  severity: MEDIUM
+  event_type: Process_Executed
+  conditions:
+    - field: metadata.command
+      operator: contains
+      value: "history -c"
