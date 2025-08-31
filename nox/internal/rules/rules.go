@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"sigs.k8s.io/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 type Rule func(event model.Event, state *StateManager) *model.Alert
