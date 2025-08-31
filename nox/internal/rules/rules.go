@@ -79,6 +79,37 @@ func LoadRulesFromFile(path string) ([]RuleDefinition, error) {
 	return rules, nil
 }
 
+func checkConditions(event model.Event, rule RuleDefinition) bool {
+	for _, cond := range rule.Conditions {
+		fieldParts := strings.Split(cond.Field, ".")
+		if len(fieldParts) != 2 || fieldParts[0] != "metadata" {
+			continue
+		}
+
+		eventValue, ok := event.Metadata[fieldParts[1]]
+		if !ok {
+			return false
+		}
+
+		match := false
+
+		switch cond.Operator {
+		case "contains":
+			match = strings.Contains(eventValue, cond.Value)
+		case "equals":
+			match = (eventValue == cond.Value)
+		default:
+			match = false
+		}
+
+		if !match {
+			return false
+		}
+	}
+
+	return true
+}
+
 func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
 	if event.EventType != "SSHD_Failed_Password" {
 		return nil
@@ -169,22 +200,12 @@ func checkNewCountryLogins(event model.Event, state *StateManager) *model.Alert 
 }
 
 var suspiciousCommands = map[string]string{
-	"nmap":       "network_scanning",
-	"nc":         "network_tool",
 	"netcat":     "network_tool",
-	"useradd":    "user_management",
 	"usermod":    "user_management",
 	"userdel":    "user_management",
 	"bash -i":    "reverse_shell",
 	"sh -i":      "reverse_shell",
-	"chmod 777":  "permission_escalation",
-	"chmod +s":   "permission_escalation",
-	"wget":       "file_download",
-	"curl":       "file_download",
-	"base64 -d":  "obfuscation",
-	"python -c":  "script_execution",
 	"perl -e":    "script_execution",
-	"crontab":    "persistence",
 	"history -c": "anti_forensics",
 	"dd if=":     "disk_access",
 	"/dev/tcp/":  "network_connection",
@@ -328,16 +349,37 @@ func checkPrivilegedEscalation(event model.Event, state *StateManager) *model.Al
 var activeRules = []Rule{
 	checkFailedLogins,
 	checkNewCountryLogins,
-	checkSuspiciousCommands,
 	checkRapidProcessExecution,
-	checkPrivilegedEscalation,
 }
 
-func EvaluateEvent(evt model.Event, state *StateManager) []model.Alert {
+func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
 	var triggeredAlerts []model.Alert
 
+	for _, rule := range yamlRules {
+		if event.EventType != rule.EventType {
+			continue
+		}
+
+		if checkConditions(event, rule) {
+			alert := model.Alert{
+				RuleName:  rule.Name,
+				Message:   rule.Description,
+				Severity:  rule.Severity,
+				Timestamp: event.Timestamp,
+				Source:    event.Source,
+				Metadata: map[string]string{
+					"mitre_technique_id": rule.TechniqueID,
+					"command":            event.Metadata["command"],
+					"process_name":       event.Metadata["process_name"],
+					"pid":                event.Metadata["pid"],
+				},
+			}
+			triggeredAlerts = append(triggeredAlerts, alert)
+		}
+	}
+
 	for _, rule := range activeRules {
-		if alert := rule(evt, state); alert != nil {
+		if alert := rule(event, state); alert != nil {
 			triggeredAlerts = append(triggeredAlerts, *alert)
 		}
 	}
