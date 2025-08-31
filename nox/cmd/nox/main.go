@@ -90,11 +90,15 @@ func main() {
 	}
 	defer db.Close()
 
+	rulesPath := os.Getenv("NOX_RULES_PATH")
+	if rulesPath == "" {
+		rulesPath = "rules.yaml"
+	}
 	// can I instead use signal.NotifyContext() to simplify signal handling?
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	yamlRules, err := rules.LoadRulesFromFile("rules.yaml")
+	yamlRules, err := rules.LoadRulesFromFile(rulesPath)
 	if err != nil {
 		log.Fatalf("could not load detection rules: %v", err)
 	}
