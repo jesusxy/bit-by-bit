@@ -2,10 +2,14 @@ package rules
 
 import (
 	"fmt"
+	"log/slog"
 	"nox/internal/model"
+	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"sigs.k8s.io/yaml"
 )
 
 type Rule func(event model.Event, state *StateManager) *model.Alert
@@ -32,6 +36,21 @@ type ProcessExecution struct {
 	UID         string
 }
 
+type Condition struct {
+	Field    string `yaml:"field"`
+	Operator string `yaml:"opearator"`
+	Value    string `yaml:"value"`
+}
+
+type RuleDefinition struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	TechniqueID string `yaml:"technique_id"`
+	Severity    string `yaml:"severity"`
+	EventType   string `yaml:"event_type"`
+	Conditions  []Condition
+}
+
 func NewStateManager() *StateManager {
 	return &StateManager{
 		FailedLoginAttempts:     make(map[string][]time.Time),
@@ -40,6 +59,24 @@ func NewStateManager() *StateManager {
 		SuspiciousCommandCount:  make(map[string]int),
 		BruteForceAlertedIPs:    make(map[string]bool),
 	}
+}
+
+func LoadRulesFromFile(path string) ([]RuleDefinition, error) {
+	slog.Info("Loading detection rules from file", "path", path)
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var rules []RuleDefinition
+	err = yaml.Unmarshal(file, &rules)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rules yaml: %w", err)
+	}
+
+	slog.Info("Successfully loaded detection rules", "count", len(rules))
+	return rules, nil
 }
 
 func checkFailedLogins(event model.Event, state *StateManager) *model.Alert {
