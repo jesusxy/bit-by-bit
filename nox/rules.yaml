@@ -27,7 +27,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.process_name
-      opearator: equals
+      operator: equals
       value: "useradd"
 - name: Interactive Root Shell via Sudo
   description: "Detects an attempt to spawn an interactive root shell using sudo a common escalation technique."
@@ -45,7 +45,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.command
-      opearator: contains
+      operator: contains
       value: "sudo -i"
 - name: Insecure File Permissions Set
   description: "Detects chmod 777, which makes a file world-writeable and is often used to prepare payloads."
@@ -54,7 +54,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.command
-      opearator: contains
+      operator: contains
       value: "chmod 777"
 - name: Setuid Bit Set on File
   description: "Detects chmod +s, which sets the SUID bit, a technique for privilege escalation and persistence."
@@ -63,7 +63,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.command
-      opearator: contains
+      operator: contains
       value: "chmod +s"
 - name: File Download with Wget
   description: "Detects file downloads using wget. Often benign, but suspicious if downloading to /tmp or /dev/shm."
@@ -81,7 +81,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.process_name
-      opearator: equals
+      operator: equals
       value: "curl"
 - name: Base64 Decoding
   description: "Detects decoding of base64 strings, a common technique to obfuscating malicious commands or payloads"
@@ -90,7 +90,7 @@
   event_type: Process_Executed
   conditions:
     - field: metadata.command
-      opearator: contains
+      operator: contains
       value: "base64 -d"
 - name: Python Script Execution from Command line
   description: "Detects direct execution of Python code from the command line, often used for droppers or exploits"
