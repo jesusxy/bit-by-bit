@@ -20,7 +20,7 @@
     - field: metadata.command
       operator: contains
       value: "-e /bin/bash"
-- name: User added via command line
+- name: Local Account Creation
   description: "Detects the creation of a new user via the useradd command."
   technique_id: T1136.001
   severity: MEDIUM
