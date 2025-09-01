@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"nox/internal/model"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hpcloud/tail"
@@ -71,12 +72,12 @@ var parsers = []logParser{
 				EventType: "Process_Executed",
 				Source:    "localhost",
 				Metadata: map[string]string{
-					"uid":          matches[1],
-					"process_name": matches[2],
-					"pid":          matches[3],
-					"ppid":         matches[4],
-					"return_code":  matches[5],
-					"command":      matches[6],
+					"uid":          strings.TrimSpace(matches[1]),
+					"process_name": strings.TrimSpace(matches[2]),
+					"pid":          strings.TrimSpace(matches[3]),
+					"ppid":         strings.TrimSpace(matches[4]),
+					"return_code":  strings.TrimSpace(matches[5]),
+					"command":      strings.TrimSpace(matches[6]),
 				},
 			}, nil
 		},
