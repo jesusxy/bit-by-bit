@@ -38,17 +38,17 @@ type ProcessExecution struct {
 
 type Condition struct {
 	Field    string `yaml:"field"`
-	Operator string `yaml:"opearator"`
+	Operator string `yaml:"operator"`
 	Value    string `yaml:"value"`
 }
 
 type RuleDefinition struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	TechniqueID string `yaml:"technique_id"`
-	Severity    string `yaml:"severity"`
-	EventType   string `yaml:"event_type"`
-	Conditions  []Condition
+	Name        string      `yaml:"name"`
+	Description string      `yaml:"description"`
+	TechniqueID string      `yaml:"technique_id"`
+	Severity    string      `yaml:"severity"`
+	EventType   string      `yaml:"event_type"`
+	Conditions  []Condition `yaml:"conditions"`
 }
 
 func NewStateManager() *StateManager {
@@ -354,6 +354,21 @@ var activeRules = []Rule{
 
 func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
 	var triggeredAlerts []model.Alert
+
+	if event.EventType == "Process_Executed" {
+		state.mu.Lock()
+		procExec := ProcessExecution{
+			Timestamp:   event.Timestamp,
+			ProcessName: event.Metadata["process_name"],
+			Command:     event.Metadata["command"],
+			PID:         event.Metadata["pid"],
+			PPID:        event.Metadata["ppid"],
+			UID:         event.Metadata["uid"],
+		}
+
+		state.ProcessExecutionHistory[event.Source] = append(state.ProcessExecutionHistory[event.Source], procExec)
+		state.mu.Unlock()
+	}
 
 	for _, rule := range yamlRules {
 		if event.EventType != rule.EventType {
