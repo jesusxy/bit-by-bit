@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"bufio"
 	"fmt"
 	"log/slog"
 	"nox/internal/model"
@@ -25,6 +26,8 @@ type StateManager struct {
 	// Track suspicious command frequency per source
 	SuspiciousCommandCount map[string]int
 	BruteForceAlertedIPs   map[string]bool
+	// Set to store known bad IP addresses for fast lookups
+	IPWatchlist map[string]bool
 }
 
 type ProcessExecution struct {
@@ -58,6 +61,7 @@ func NewStateManager() *StateManager {
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
 		SuspiciousCommandCount:  make(map[string]int),
 		BruteForceAlertedIPs:    make(map[string]bool),
+		IPWatchlist:             make(map[string]bool),
 	}
 }
 
@@ -77,6 +81,33 @@ func LoadRulesFromFile(path string) ([]RuleDefinition, error) {
 
 	slog.Info("Successfully loaded detection rules", "count", len(rules))
 	return rules, nil
+}
+
+func LoadIPWatchlistFromFile(path string, state *StateManager) error {
+	slog.Info("Loading IP watchlist from file...", "path", path)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("failed to read IP watchlist file: %w", err)
+	}
+	defer file.Close()
+
+	newIPWatchlist := make(map[string]bool)
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		ip := strings.TrimSpace(scanner.Text())
+		if ip != "" && !strings.HasPrefix(ip, "#") {
+			newIPWatchlist[ip] = true
+		}
+	}
+
+	state.mu.Lock()
+	state.IPWatchlist = newIPWatchlist
+	state.mu.Unlock()
+
+	slog.Info("Successfully loaded IP watchlist", "count", len(newIPWatchlist))
+	return scanner.Err()
 }
 
 func checkConditions(event model.Event, rule RuleDefinition) bool {
@@ -345,11 +376,38 @@ func checkPrivilegedEscalation(event model.Event, state *StateManager) *model.Al
 	return nil
 }
 
+func checkIPWatchlist(event model.Event, state *StateManager) *model.Alert {
+	if event.Source == "" {
+		return nil // cant check events without a source IP
+	}
+
+	state.mu.RLock()
+	isMatch, found := state.IPWatchlist[event.Source]
+	state.mu.RUnlock()
+
+	if found && isMatch {
+		return &model.Alert{
+			RuleName:  "IPWatchlistMatch",
+			Message:   fmt.Sprintf("Traffic detected from a known-bad IP address: %s", event.Source),
+			Severity:  "HIGH",
+			Timestamp: event.Timestamp,
+			Source:    event.Source,
+			Metadata: map[string]string{
+				"mitre_tactic": "TA0011",
+				"event_type":   event.EventType,
+			},
+		}
+	}
+
+	return nil
+}
+
 // activeRules is the registry of all rules the engine will run.
 var activeRules = []Rule{
 	checkFailedLogins,
 	checkNewCountryLogins,
 	checkRapidProcessExecution,
+	checkIPWatchlist,
 }
 
 func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
