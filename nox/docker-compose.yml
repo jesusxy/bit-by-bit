@@ -6,3 +6,4 @@ services:
       - ./testdata:/app/testdata
     environment:
       - NOX_RULES_PATH=/detections/rules.yaml
+      - NOX_INTEL_PATH=/intel/ip_watchlist.txt

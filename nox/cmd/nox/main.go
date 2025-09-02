@@ -107,6 +107,14 @@ func main() {
 	alertChannel := make(chan model.Alert, 500)
 	stateManager := rules.NewStateManager()
 
+	intelPath := os.Getenv("NOX_INTEL_PATH")
+	if intelPath == "" {
+		intelPath = "intel/ip_watchlist.txt"
+	}
+	if err := rules.LoadIPWatchlistFromFile(intelPath, stateManager); err != nil {
+		slog.Error("failed to load IP watchlist", "error", err)
+	}
+
 	// start background services
 	go startMetricsServer(ctx)
 	go ingester.TailFile("testdata/auth.log", eventChannel)
