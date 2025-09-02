@@ -92,7 +92,7 @@ func main() {
 
 	rulesPath := os.Getenv("NOX_RULES_PATH")
 	if rulesPath == "" {
-		rulesPath = "rules.yaml"
+		rulesPath = "detections/rules.yaml"
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -2,7 +2,7 @@ services:
   nox:
     build: .
     volumes:
-      - ./rules:/rules
+      - ./detections:/detections
       - ./testdata:/app/testdata
     environment:
-      - NOX_RULES_PATH=/rules/rules.yaml
+      - NOX_RULES_PATH=/detections/rules.yaml
