@@ -1,0 +1,10 @@
+# intel/ip_watchlist.txt
+
+# Known C2 Server from APT group
+185.193.125.241
+
+# Common TOR exit node
+89.234.180.122
+
+# Spam/Scanning source
+45.148.10.150
