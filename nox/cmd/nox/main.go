@@ -195,6 +195,11 @@ func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip
 
 	triggeredAlerts := rules.EvaluateEvent(event, yamlRules, stateManager)
 
+	correlationAlerts := rules.RunCorrelationRules(event, triggeredAlerts, stateManager)
+	if len(correlationAlerts) > 0 {
+		triggeredAlerts = append(triggeredAlerts, correlationAlerts...)
+	}
+
 	for _, alert := range triggeredAlerts {
 		select {
 		case alertChannel <- alert:
