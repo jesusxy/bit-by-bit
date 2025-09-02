@@ -15,19 +15,18 @@ import (
 
 type Rule func(event model.Event, state *StateManager) *model.Alert
 
+// A CorrelationRule looks for chains of events and alerts over time.
+type CorrelationRule func(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert
+
 type StateManager struct {
-	mu sync.RWMutex
-	// Tracks failed login attempts. Key: IP Address, Value: List of timestamps.
-	FailedLoginAttempts map[string][]time.Time
-	// we can add more state maps here for future rules, e.g.:
-	UserLoginLocations map[string]map[string]bool // Key: Username, Value: Set of country codes
-	// Track process execution patterns for behavioral analysis
-	ProcessExecutionHistory map[string][]ProcessExecution
-	// Track suspicious command frequency per source
-	SuspiciousCommandCount map[string]int
-	BruteForceAlertedIPs   map[string]bool
-	// Set to store known bad IP addresses for fast lookups
-	IPWatchlist map[string]bool
+	mu                      sync.RWMutex
+	FailedLoginAttempts     map[string][]time.Time        // Tracks failed login attempts. Key: IP Address, Value: List of timestamps.
+	UserLoginLocations      map[string]map[string]bool    // we can add more state maps here for future rules, e.g.: Key: Username, Value: Set of country codes
+	ProcessExecutionHistory map[string][]ProcessExecution // Track process execution patterns for behavioral analysis
+	SuspiciousCommandCount  map[string]int                // Track suspicious command frequency per source
+	BruteForceAlertedIPs    map[string]bool
+	IPWatchlist             map[string]bool      // Set to store known bad IP addresses for fast lookups
+	SuspiciousLoginTracker  map[string]time.Time // track recent suspicious logins to correlate with later activity
 }
 
 type ProcessExecution struct {
@@ -54,14 +53,35 @@ type RuleDefinition struct {
 	Conditions  []Condition `yaml:"conditions"`
 }
 
+var privEscPatterns = []string{
+	"sudo su",
+	"su -",
+	"sudo -i",
+	"sudo bash",
+	"sudo sh",
+}
+
+var suspiciousCommands = map[string]string{
+	"netcat":     "network_tool",
+	"usermod":    "user_management",
+	"userdel":    "user_management",
+	"bash -i":    "reverse_shell",
+	"sh -i":      "reverse_shell",
+	"perl -e":    "script_execution",
+	"history -c": "anti_forensics",
+	"dd if=":     "disk_access",
+	"/dev/tcp/":  "network_connection",
+}
+
 func NewStateManager() *StateManager {
 	return &StateManager{
+		BruteForceAlertedIPs:    make(map[string]bool),
 		FailedLoginAttempts:     make(map[string][]time.Time),
-		UserLoginLocations:      make(map[string]map[string]bool),
+		IPWatchlist:             make(map[string]bool),
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
 		SuspiciousCommandCount:  make(map[string]int),
-		BruteForceAlertedIPs:    make(map[string]bool),
-		IPWatchlist:             make(map[string]bool),
+		SuspiciousLoginTracker:  make(map[string]time.Time),
+		UserLoginLocations:      make(map[string]map[string]bool),
 	}
 }
 
@@ -230,71 +250,6 @@ func checkNewCountryLogins(event model.Event, state *StateManager) *model.Alert 
 	return nil
 }
 
-var suspiciousCommands = map[string]string{
-	"netcat":     "network_tool",
-	"usermod":    "user_management",
-	"userdel":    "user_management",
-	"bash -i":    "reverse_shell",
-	"sh -i":      "reverse_shell",
-	"perl -e":    "script_execution",
-	"history -c": "anti_forensics",
-	"dd if=":     "disk_access",
-	"/dev/tcp/":  "network_connection",
-}
-
-func checkSuspiciousCommands(event model.Event, state *StateManager) *model.Alert {
-	if event.EventType != "Process_Executed" {
-		return nil
-	}
-
-	command, ok := event.Metadata["command"]
-	if !ok {
-		return nil
-	}
-
-	state.mu.Lock()
-	defer state.mu.Unlock()
-
-	processExec := ProcessExecution{
-		Timestamp:   event.Timestamp,
-		ProcessName: event.Metadata["process_name"],
-		Command:     command,
-		PID:         event.Metadata["pid"],
-		PPID:        event.Metadata["ppid"],
-		UID:         event.Metadata["uid"],
-	}
-
-	source := event.Source
-	state.ProcessExecutionHistory[source] = append(state.ProcessExecutionHistory[source], processExec)
-
-	for suspiciousCmd, category := range suspiciousCommands {
-		if strings.Contains(strings.ToLower(command), strings.ToLower(suspiciousCmd)) {
-			state.SuspiciousCommandCount[source]++
-
-			severity := "MEDIUM"
-			if category == "reverse_shell" || category == "permission_escalation" {
-				severity = "HIGH"
-			}
-
-			return &model.Alert{
-				RuleName:  "SuspiciousCommandExecution",
-				Message:   fmt.Sprintf("A suspicious command was executed: '%s'", command),
-				Severity:  severity,
-				Timestamp: event.Timestamp,
-				Source:    source,
-				Metadata: map[string]string{
-					"command":      command,
-					"category":     category,
-					"process_name": event.Metadata["process_name"],
-					"pid":          event.Metadata["pid"],
-					"uid":          event.Metadata["uid"],
-				},
-			}
-		}
-	}
-	return nil
-}
-
 func checkRapidProcessExecution(event model.Event, state *StateManager) *model.Alert {
 	if event.EventType != "Process_Executed" {
 		return nil
@@ -339,43 +294,6 @@ func checkRapidProcessExecution(event model.Event, state *StateManager) *model.A
 	return nil
 }
 
-func checkPrivilegedEscalation(event model.Event, state *StateManager) *model.Alert {
-	if event.EventType != "Process_Executed" {
-		return nil
-	}
-
-	command := event.Metadata["command"]
-	uid := event.Metadata["uid"]
-	ppid := event.Metadata["ppid"]
-
-	privEscPatterns := []string{
-		"sudo su",
-		"su -",
-		"sudo -i",
-		"sudo bash",
-		"sudo sh",
-	}
-
-	for _, pattern := range privEscPatterns {
-		if strings.Contains(strings.ToLower(command), pattern) {
-			return &model.Alert{
-				RuleName:  "PrivilegeEscalationAttempt",
-				Message:   fmt.Sprintf("Potential privilege escalation detected: '%s' (UID: %s, PPID: %s)", command, uid, ppid),
-				Severity:  "HIGH",
-				Timestamp: event.Timestamp,
-				Source:    event.Source,
-				Metadata: map[string]string{
-					"command": command,
-					"uid":     uid,
-					"ppid":    ppid,
-				},
-			}
-		}
-	}
-
-	return nil
-}
-
 func checkIPWatchlist(event model.Event, state *StateManager) *model.Alert {
 	if event.Source == "" {
 		return nil // cant check events without a source IP
@@ -402,12 +320,69 @@ func checkIPWatchlist(event model.Event, state *StateManager) *model.Alert {
 	return nil
 }
 
+func correlateLoginAndEscalation(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
+	// check for the start of the chain (a NewCountryLogin)
+	for _, alert := range existingAlerts {
+		// instead of having to iterate through a list is there a better approach?
+		// im thinking something like a pub sub where we listen for certain events and can udpate this state accordingly
+		// if we have a huge log of alerts we would have to check each one
+		if alert.RuleName == "NewCountryLogin" {
+			state.mu.Lock()
+			state.SuspiciousLoginTracker[alert.Source] = alert.Timestamp
+			state.mu.Unlock()
+			return nil
+		}
+	}
+
+	// check for the end of the chain (privilege escalation event)
+	if event.EventType == "Processed_Executed" {
+		isPrivEsc := false
+		command := event.Metadata["command"]
+
+		for _, pattern := range privEscPatterns {
+			if strings.Contains(pattern, command) {
+				isPrivEsc = true
+				break
+			}
+		}
+
+		if isPrivEsc {
+			state.mu.Lock()
+			defer state.mu.Unlock()
+
+			if loginTime, ok := state.SuspiciousLoginTracker[event.Source]; ok {
+				if event.Timestamp.Sub(loginTime) <= 10*time.Minute {
+					delete(state.SuspiciousLoginTracker, event.Source)
+					return &model.Alert{
+						RuleName:  "CorrelatedAttackChain",
+						Message:   fmt.Sprintf("Attack Chain Detected: A login from a new country (%s) was followed by a privilege escalation attempt.", event.Source),
+						Severity:  "CRITICAL",
+						Timestamp: event.Timestamp,
+						Source:    event.Source,
+						Metadata: map[string]string{
+							"mitre_tactic":       "TA0004",
+							"correlated_events":  "NewCountryLogin, PrivilegeEscalationAttempt",
+							"time_to_escalation": event.Timestamp.Sub(loginTime).String(),
+						},
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // activeRules is the registry of all rules the engine will run.
 var activeRules = []Rule{
 	checkFailedLogins,
 	checkNewCountryLogins,
 	checkRapidProcessExecution,
 	checkIPWatchlist,
+}
+
+var activeCorrelationRules = []CorrelationRule{
+	correlateLoginAndEscalation,
 }
 
 func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
@@ -458,4 +433,16 @@ func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateMa
 	}
 
 	return triggeredAlerts
+}
+
+func RunCorrelationRules(event model.Event, existingAlerts []model.Alert, state *StateManager) []model.Alert {
+	var correlationAlerts []model.Alert
+
+	for _, rule := range activeCorrelationRules {
+		if alert := rule(event, existingAlerts, state); alert != nil {
+			correlationAlerts = append(correlationAlerts, *alert)
+		}
+	}
+
+	return correlationAlerts
 }
