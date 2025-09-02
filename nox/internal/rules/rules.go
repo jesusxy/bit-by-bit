@@ -323,9 +323,6 @@ func checkIPWatchlist(event model.Event, state *StateManager) *model.Alert {
 func correlateLoginAndEscalation(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
 	// check for the start of the chain (a NewCountryLogin)
 	for _, alert := range existingAlerts {
-		// instead of having to iterate through a list is there a better approach?
-		// im thinking something like a pub sub where we listen for certain events and can udpate this state accordingly
-		// if we have a huge log of alerts we would have to check each one
 		if alert.RuleName == "NewCountryLogin" {
 			state.mu.Lock()
 			state.SuspiciousLoginTracker[alert.Source] = alert.Timestamp
