@@ -94,7 +94,7 @@ func main() {
 	if rulesPath == "" {
 		rulesPath = "rules.yaml"
 	}
-	// can I instead use signal.NotifyContext() to simplify signal handling?
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
