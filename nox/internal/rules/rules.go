@@ -446,29 +446,24 @@ func correlateDownloadAndExecute(event model.Event, existingAlerts []model.Alert
 }
 
 func correlateBruteForceAndEvasion(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
-	if event.EventType != "Process_Executed" {
-		return nil
-	}
-
-	if event.EventType == "SSHD_ACCEPTED_PASSWORD" {
+	switch event.EventType {
+	case "SSHD_Accepted_Password":
 		state.mu.Lock()
 		defer state.mu.Unlock()
 
 		// during a Brute Force attack, more than likely we will have the IP in BruteForceAlertedIPs struct
 		if state.BruteForceAlertedIPs[event.Source] {
 			sshdPID := event.Metadata["sshd_pid"]
+
 			if sshdPID != "" {
-				slog.Debug("Correlating a successful login with a prior brute-force alert", "source", event.Source)
-				state.PostBruteForceLogins[event.Source] = PostBruteForceInfo{
+				state.PostBruteForceLogins[sshdPID] = PostBruteForceInfo{
 					LoginTime: event.Timestamp,
 					SourceIP:  event.Source,
 				}
 				delete(state.BruteForceAlertedIPs, event.Source)
 			}
 		}
-	}
-
-	if event.EventType == "Process_Executed" {
+	case "Process_Executed":
 		command := event.Metadata["command"]
 		ppid := event.Metadata["ppid"]
 		isDefenseEvasion := false
@@ -483,6 +478,7 @@ func correlateBruteForceAndEvasion(event model.Event, existingAlerts []model.Ale
 		if isDefenseEvasion {
 			state.mu.Lock()
 			defer state.mu.Unlock()
+
 			if loginInfo, ok := state.PostBruteForceLogins[ppid]; ok {
 				if event.Timestamp.Sub(loginInfo.LoginTime) <= 5*time.Minute {
 					delete(state.PostBruteForceLogins, ppid)
