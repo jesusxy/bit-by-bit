@@ -26,9 +26,9 @@ type StateManager struct {
 	ProcessExecutionHistory map[string][]ProcessExecution // Track process execution patterns for behavioral analysis
 	SuspiciousCommandCount  map[string]int                // Track suspicious command frequency per source
 	BruteForceAlertedIPs    map[string]bool
-	IPWatchlist             map[string]bool      // Set to store known bad IP addresses for fast lookups
-	PostBruteForceLogins    map[string]time.Time // track IPs where brute force was followed by a successful login
-	SuspiciousLoginTracker  map[string]time.Time // track recent suspicious logins to correlate with later activity
+	IPWatchlist             map[string]bool               // Set to store known bad IP addresses for fast lookups
+	PostBruteForceLogins    map[string]PostBruteForceInfo // track IPs where brute force was followed by a successful login
+	SuspiciousLoginTracker  map[string]time.Time          // track recent suspicious logins to correlate with later activity
 	StagedPayloads          map[string]time.Time
 }
 
@@ -54,6 +54,11 @@ type RuleDefinition struct {
 	Severity    string      `yaml:"severity"`
 	EventType   string      `yaml:"event_type"`
 	Conditions  []Condition `yaml:"conditions"`
+}
+
+type PostBruteForceInfo struct {
+	LoginTime time.Time
+	SourceIP  string
 }
 
 var privEscPatterns = []string{
@@ -89,7 +94,7 @@ func NewStateManager() *StateManager {
 		FailedLoginAttempts:     make(map[string][]time.Time),
 		IPWatchlist:             make(map[string]bool),
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
-		PostBruteForceLogins:    make(map[string]time.Time),
+		PostBruteForceLogins:    make(map[string]PostBruteForceInfo),
 		StagedPayloads:          make(map[string]time.Time),
 		SuspiciousCommandCount:  make(map[string]int),
 		SuspiciousLoginTracker:  make(map[string]time.Time),
@@ -412,26 +417,27 @@ func correlateDownloadAndExecute(event model.Event, existingAlerts []model.Alert
 			state.mu.Unlock()
 			slog.Debug("Stages a potential payload for correlation", "path", filepath)
 		}
-	}
+	} else {
 
-	state.mu.Lock()
-	defer state.mu.Unlock()
+		state.mu.Lock()
+		defer state.mu.Unlock()
 
-	for stagedPath, downloadTime := range state.StagedPayloads {
-		if strings.Contains(command, stagedPath) && event.Timestamp.Sub(downloadTime) <= 2*time.Minute {
-			delete(state.StagedPayloads, stagedPath)
-			return &model.Alert{
-				RuleName:  "CorrelatedDownloadAndExecute",
-				Message:   fmt.Sprintf("Attack Chain Detected: A file was downloaded to %s and then executed.", stagedPath),
-				Severity:  "CRITICAL",
-				Timestamp: event.Timestamp,
-				Source:    event.Source,
-				Metadata: map[string]string{
-					"mitre_technique":   "T1105",
-					"time_to_execution": event.Timestamp.Sub(downloadTime).String(),
-					"executed_command":  command,
-					"staged_filepath":   stagedPath,
-				},
+		for stagedPath, downloadTime := range state.StagedPayloads {
+			if strings.Contains(command, stagedPath) && event.Timestamp.Sub(downloadTime) <= 2*time.Minute {
+				delete(state.StagedPayloads, stagedPath)
+				return &model.Alert{
+					RuleName:  "CorrelatedDownloadAndExecute",
+					Message:   fmt.Sprintf("Attack Chain Detected: A file was downloaded to %s and then executed.", stagedPath),
+					Severity:  "CRITICAL",
+					Timestamp: event.Timestamp,
+					Source:    event.Source,
+					Metadata: map[string]string{
+						"mitre_technique":   "T1105",
+						"time_to_execution": event.Timestamp.Sub(downloadTime).String(),
+						"executed_command":  command,
+						"staged_filepath":   stagedPath,
+					},
+				}
 			}
 		}
 	}
@@ -450,14 +456,21 @@ func correlateBruteForceAndEvasion(event model.Event, existingAlerts []model.Ale
 
 		// during a Brute Force attack, more than likely we will have the IP in BruteForceAlertedIPs struct
 		if state.BruteForceAlertedIPs[event.Source] {
-			slog.Debug("Correlating a successful login with a prior brute-force alert", "source", event.Source)
-			state.PostBruteForceLogins[event.Source] = event.Timestamp
-			delete(state.BruteForceAlertedIPs, event.Source)
+			sshdPID := event.Metadata["sshd_pid"]
+			if sshdPID != "" {
+				slog.Debug("Correlating a successful login with a prior brute-force alert", "source", event.Source)
+				state.PostBruteForceLogins[event.Source] = PostBruteForceInfo{
+					LoginTime: event.Timestamp,
+					SourceIP:  event.Source,
+				}
+				delete(state.BruteForceAlertedIPs, event.Source)
+			}
 		}
 	}
 
 	if event.EventType == "Process_Executed" {
 		command := event.Metadata["command"]
+		ppid := event.Metadata["ppid"]
 		isDefenseEvasion := false
 
 		for _, pattern := range defenseEvasionPatterns {
@@ -470,10 +483,23 @@ func correlateBruteForceAndEvasion(event model.Event, existingAlerts []model.Ale
 		if isDefenseEvasion {
 			state.mu.Lock()
 			defer state.mu.Unlock()
-			if loginTime, ok := state.PostBruteForceLogins[event.Source]; ok {
-				if event.Timestamp.Sub(loginTime) <= 5*time.Minute {
-					delete(state.PostBruteForceLogins, event.Source)
-					return &model.Alert{}
+			if loginInfo, ok := state.PostBruteForceLogins[ppid]; ok {
+				if event.Timestamp.Sub(loginInfo.LoginTime) <= 5*time.Minute {
+					delete(state.PostBruteForceLogins, ppid)
+					return &model.Alert{
+						RuleName:  "CorrelatedBruteForceAndEvasion",
+						Message:   fmt.Sprintf("Attack Chain Detected: A successful login from %s after a brute-force was followed by the defense evasion command: '%s'", loginInfo.SourceIP, command),
+						Severity:  "CRITICAL",
+						Timestamp: event.Timestamp,
+						Source:    loginInfo.SourceIP,
+						Metadata: map[string]string{
+							"mitre_tactic":      "TA0005",
+							"correlated_events": "TooManyFailedLogins, SSHD_Accepted_Password, DefenseEvasionCommand",
+							"source_ip":         loginInfo.SourceIP,
+							"evasion_command":   command,
+							"linked_sshd_pid":   ppid,
+						},
+					}
 				}
 			}
 		}
@@ -498,7 +524,7 @@ func correlateLocalAccountImmediateUse(event model.Event, existingAlerts []model
 				slog.Debug("Tracking new account creation for correlation", "user", newUser)
 			}
 		}
-	case "SSHD_Accepted_Passowrd":
+	case "SSHD_Accepted_Password":
 		loginUser := event.Metadata["user"]
 		if loginUser == "" {
 			return nil
@@ -510,7 +536,18 @@ func correlateLocalAccountImmediateUse(event model.Event, existingAlerts []model
 		if creationTime, ok := state.NewAccountTracker[loginUser]; ok {
 			if event.Timestamp.Sub(creationTime) <= 1*time.Hour {
 				delete(state.NewAccountTracker, loginUser)
-				return &model.Alert{}
+				return &model.Alert{
+					RuleName:  "CorrelatedNewAccountUsage",
+					Message:   fmt.Sprintf("Attack Chain Detected: A new local account for user '%s' was created and used to log in shortly after.", loginUser),
+					Severity:  "HIGH",
+					Timestamp: event.Timestamp,
+					Source:    event.Source,
+					Metadata: map[string]string{
+						"mitre_tactic":  "TA0003", // peristence
+						"username":      loginUser,
+						"time_to_login": event.Timestamp.Sub(creationTime).String(),
+					},
+				}
 			}
 		}
 	}
