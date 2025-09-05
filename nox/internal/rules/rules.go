@@ -20,12 +20,14 @@ type CorrelationRule func(event model.Event, existingAlerts []model.Alert, state
 
 type StateManager struct {
 	mu                      sync.RWMutex
+	NewAccountTracker       map[string]time.Time
 	FailedLoginAttempts     map[string][]time.Time        // Tracks failed login attempts. Key: IP Address, Value: List of timestamps.
 	UserLoginLocations      map[string]map[string]bool    // we can add more state maps here for future rules, e.g.: Key: Username, Value: Set of country codes
 	ProcessExecutionHistory map[string][]ProcessExecution // Track process execution patterns for behavioral analysis
 	SuspiciousCommandCount  map[string]int                // Track suspicious command frequency per source
 	BruteForceAlertedIPs    map[string]bool
 	IPWatchlist             map[string]bool      // Set to store known bad IP addresses for fast lookups
+	PostBruteForceLogins    map[string]time.Time // track IPs where brute force was followed by a successful login
 	SuspiciousLoginTracker  map[string]time.Time // track recent suspicious logins to correlate with later activity
 	StagedPayloads          map[string]time.Time
 }
@@ -74,12 +76,20 @@ var suspiciousCommands = map[string]string{
 	"/dev/tcp/":  "network_connection",
 }
 
+var defenseEvasionPatterns = []string{
+	"history -c",
+	"unset HISTFILE",
+	"rm /root/.bash_history",
+}
+
 func NewStateManager() *StateManager {
 	return &StateManager{
+		NewAccountTracker:       make(map[string]time.Time),
 		BruteForceAlertedIPs:    make(map[string]bool),
 		FailedLoginAttempts:     make(map[string][]time.Time),
 		IPWatchlist:             make(map[string]bool),
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
+		PostBruteForceLogins:    make(map[string]time.Time),
 		StagedPayloads:          make(map[string]time.Time),
 		SuspiciousCommandCount:  make(map[string]int),
 		SuspiciousLoginTracker:  make(map[string]time.Time),
@@ -384,7 +394,7 @@ func extractFilePath(command string) string {
 }
 
 func correlateDownloadAndExecute(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
-	if event.EventType != "Process_Execute" {
+	if event.EventType != "Process_Executed" {
 		return nil
 	}
 
@@ -429,6 +439,85 @@ func correlateDownloadAndExecute(event model.Event, existingAlerts []model.Alert
 	return nil
 }
 
+func correlateBruteForceAndEvasion(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
+	if event.EventType != "Process_Executed" {
+		return nil
+	}
+
+	if event.EventType == "SSHD_ACCEPTED_PASSWORD" {
+		state.mu.Lock()
+		defer state.mu.Unlock()
+
+		// during a Brute Force attack, more than likely we will have the IP in BruteForceAlertedIPs struct
+		if state.BruteForceAlertedIPs[event.Source] {
+			slog.Debug("Correlating a successful login with a prior brute-force alert", "source", event.Source)
+			state.PostBruteForceLogins[event.Source] = event.Timestamp
+			delete(state.BruteForceAlertedIPs, event.Source)
+		}
+	}
+
+	if event.EventType == "Process_Executed" {
+		command := event.Metadata["command"]
+		isDefenseEvasion := false
+
+		for _, pattern := range defenseEvasionPatterns {
+			if strings.Contains(command, pattern) {
+				isDefenseEvasion = true
+				break
+			}
+		}
+
+		if isDefenseEvasion {
+			state.mu.Lock()
+			defer state.mu.Unlock()
+			if loginTime, ok := state.PostBruteForceLogins[event.Source]; ok {
+				if event.Timestamp.Sub(loginTime) <= 5*time.Minute {
+					delete(state.PostBruteForceLogins, event.Source)
+					return &model.Alert{}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func correlateLocalAccountImmediateUse(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
+	switch event.EventType {
+	case "Process_Executed":
+		command := event.Metadata["command"]
+		process := event.Metadata["process_name"]
+
+		if process == "useradd" {
+			parts := strings.Fields(command)
+			if len(parts) > 1 {
+				newUser := parts[len(parts)-1]
+				state.mu.Lock()
+				state.NewAccountTracker[newUser] = event.Timestamp
+				state.mu.Unlock()
+				slog.Debug("Tracking new account creation for correlation", "user", newUser)
+			}
+		}
+	case "SSHD_Accepted_Passowrd":
+		loginUser := event.Metadata["user"]
+		if loginUser == "" {
+			return nil
+		}
+
+		state.mu.Lock()
+		defer state.mu.Unlock()
+
+		if creationTime, ok := state.NewAccountTracker[loginUser]; ok {
+			if event.Timestamp.Sub(creationTime) <= 1*time.Hour {
+				delete(state.NewAccountTracker, loginUser)
+				return &model.Alert{}
+			}
+		}
+	}
+
+	return nil
+}
+
 // activeRules is the registry of all rules the engine will run.
 var activeRules = []Rule{
 	checkFailedLogins,
@@ -440,6 +529,8 @@ var activeRules = []Rule{
 var activeCorrelationRules = []CorrelationRule{
 	correlateLoginAndEscalation,
 	correlateDownloadAndExecute,
+	correlateBruteForceAndEvasion,
+	correlateLocalAccountImmediateUse,
 }
 
 func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
