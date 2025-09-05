@@ -107,8 +107,8 @@ func runTargetedTest(name string) {
 
 		log.Println("Injecting: Successful Login post-brute-force")
 		timestampSuccess := time.Now().Format("Jan  2 15:04:05")
-		pidSuccess, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
-		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, pidSuccess, "root", attackIP, portSuccess)
+		sshdPID, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
+		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, sshdPID, "root", attackIP, portSuccess)
 		appendLog(successLog)
 
 		time.Sleep(5 * time.Second)
@@ -116,7 +116,9 @@ func runTargetedTest(name string) {
 		// 5. Attacker tries to cover their tracks
 		log.Println("Injecting: Defense Evasion (history clear)")
 		timestampEvasion := time.Now().Format("15:04:05")
-		pidEvasion, ppidEvasion := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		pidEvasion := rand.Intn(90000) + 1000
+		ppidEvasion := sshdPID
+
 		evasionLog := fmt.Sprintf(execsnoopTemplate, timestampEvasion, 0, "bash", pidEvasion, ppidEvasion, 0, "history -c")
 		appendLog(evasionLog)
 
