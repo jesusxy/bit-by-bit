@@ -46,13 +46,13 @@ var parsers = []logParser{
 	},
 	{
 		EventType: "SSHD_Accepted_Password",
-		Regex:     regexp.MustCompile(`Accepted password for (\S+) from ([\d\.]+) port \d+ ssh2`),
+		Regex:     regexp.MustCompile(`sshd\[(\d+)\]: Accepted password for (\S+) from ([\d\.]+) port \d+ ssh2`),
 		SimpleBuilder: func(matches []string) (model.Event, error) {
 			return model.Event{
 				Timestamp: time.Now().UTC(),
 				EventType: "SSHD_Accepted_Password",
-				Source:    matches[2],
-				Metadata:  map[string]string{"user": matches[1]},
+				Source:    matches[3],
+				Metadata:  map[string]string{"user": matches[2], "sshd_pid": matches[1]},
 			}, nil
 		},
 	},
