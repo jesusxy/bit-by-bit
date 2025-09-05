@@ -52,7 +52,10 @@ var parsers = []logParser{
 				Timestamp: time.Now().UTC(),
 				EventType: "SSHD_Accepted_Password",
 				Source:    matches[3],
-				Metadata:  map[string]string{"user": matches[2], "sshd_pid": matches[1]},
+				Metadata: map[string]string{
+					"user":     matches[2],
+					"sshd_pid": matches[1],
+				},
 			}, nil
 		},
 	},
