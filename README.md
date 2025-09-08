@@ -18,5 +18,6 @@ Inspired by the book `But How Do It Know?`, these projects are learning artifact
 | [tiny-sql](./sql-lite-clone)     | In-memory SQL-like query engine (WIP)           |
 | [ror](./ror)         | A minimal OCI-compliant container runtime built from scratch in Go |
 | [kell](./kell) | Exploring the controller pattern with a Kubernetes operator in Go |
+| [nox](./nox) | A stateful Intrusion Detection System (IDS) in Go |
 | `js-runtime-c` | Exploring interpreter fundamentals (planned)    |
 | `debugger`     | Lightweight debugger with breakpoints (planned) |
