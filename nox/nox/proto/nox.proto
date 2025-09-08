@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package nox;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "nox/proto";
+
+service NoxService {
+    rpc QueryProcessHistory(QueryRequest) returns (ProcessHistoryResponse);
+    rpc FailedLogins(IPRequest) returns (LoginHistoryResponse);
+
+    rpc SearchEvents(SearchRequest) returns (SearchResponse);
+    rpc GetProcessAncestry(PIDRequest) returns (ProcessHistoryResponse);
+    rpc GetTopEvents(TopNRequest) returns (TopNResponse);
+}
+
+message QueryRequest {}
+message IPRequest {
+    string ip_adress = 1;
+}
+
+message PIDRequest {
+    string pid = 1;
+}
+
+message ProcessHistoryResponse {
+    repeated ProcessExecutionEvent events = 1;
+}
+
+message LoginHistoryResponse {
+    repeated google.protobuf.Timestamp timestamps = 1;
+}
+
+// --- Advanced Messages ---
+
+message SearchRequest {
+    google.protobuf.Timestamp start_time = 1;
+    google.protobuf.Timestamp end_time = 2;
+    map<string, string> filters = 3;
+}
+
+message SearchResponse {
+    repeated ProcessExecutionEvent process_events = 1;
+}
+
+message TopNRequest {
+    google.protobuf.Timestamp start_time = 1;
+    google.protobuf.Timestamp end_time = 2;
+    string field = 3;
+    int32 n = 4;
+}
+
+message TopNResponse {
+    message Count {
+        string item = 1;
+        int64 count = 2;
+    }
+    repeated Count results = 1;
+}
+
+// --- Data Structures ---
+
+message ProcessExecutionEvent {
+    google.protobuf.Timestamp timestamp = 1;
+    string process_name = 2;
+    string command = 3;
+    string pid = 4;
+    string ppid = 5;
+    string uid = 6;
+}
