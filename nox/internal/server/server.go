@@ -32,7 +32,7 @@ type NoxAPIServer struct {
 	esClient *storage.ESClient
 }
 
-func NewNoxAPIClient(esClient *storage.ESClient) *NoxAPIServer {
+func NewNoxAPIServer(esClient *storage.ESClient) *NoxAPIServer {
 	return &NoxAPIServer{esClient: esClient}
 }
 
