@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"nox/internal/storage"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -81,6 +81,128 @@ var (
 func init() {
 	prometheus.MustRegister(eventsProcessedTotal)
 	prometheus.MustRegister(alertsTriggeredTotal)
+	prometheus.MustRegister(alertsBySeverityTotal)
+}
+
+type Config struct {
+	RulesPath     string
+	IntelPath     string
+	LogPath       string
+	GeoIPDBPath   string
+	Elasticsearch struct {
+		URL string
+	}
+	GRPC struct {
+		Addr string
+	}
+	Metrics struct {
+		Addr string
+	}
+	BufferSize int
+}
+
+type Nox struct {
+	Config   *Config
+	Logger   *slog.Logger
+	ESClient *storage.ESClient
+	GeoIPDB  *geoip2.Reader
+	Rules    []rules.RuleDefinition
+	StateMgr *rules.StateManager
+	wg       sync.WaitGroup
+}
+
+func NewNox(cfg *Config, logger *slog.Logger) (*Nox, error) {
+	db, err := geoip2.Open(cfg.GeoIPDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening GeoIP database: %w", err)
+	}
+
+	esClient, err := storage.NewESClient(cfg.Elasticsearch.URL)
+	if err != nil {
+		db.Close() // why do we close here instead of doing defer db.close() outside of this block
+		return nil, fmt.Errorf("could not crete Elasticsearch client: %w", err)
+	}
+
+	yamlRules, err := rules.LoadRulesFromFile(cfg.RulesPath)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("could not load detection rules: %w", err)
+	}
+
+	stateManager := rules.NewStateManager()
+	if err := rules.LoadIPWatchlistFromFile(cfg.IntelPath, stateManager); err != nil {
+		logger.Error("failed to load IP watchlist", "error", err)
+	}
+
+	return &Nox{
+		Config:   cfg,
+		Logger:   logger,
+		ESClient: esClient,
+		GeoIPDB:  db,
+		Rules:    yamlRules,
+		StateMgr: stateManager,
+	}, nil
+
+}
+
+// Run starts all background services and the main processing loop.
+func (n *Nox) Run(ctx context.Context) error {
+	// ---- Ensure Elasticsearch Indices exists ---
+	n.Logger.Info("Waiting for Elasticsearch...")
+	time.Sleep(10 * time.Second)
+	n.ESClient.EnsureIndex(ctx, "process_executed")
+	n.ESClient.EnsureIndex(ctx, "sshd_accepted_password")
+	n.ESClient.EnsureIndex(ctx, "sshd_failed_password")
+	n.Logger.Info("Elasticsearch indices are ready.")
+
+	eventChannel := make(chan model.Event, n.Config.BufferSize)
+	alertChannel := make(chan model.Alert, n.Config.BufferSize/2)
+
+	// --- Start Background Services ---
+	n.startMetricsServer(ctx)
+	n.startGRPCServer(ctx)
+	n.startFileIngester(ctx, eventChannel)
+	n.startAlertHandler(ctx, alertChannel)
+
+	n.Logger.Info("Nox IDS engine started",
+		"version", "0.1.0",
+		"log_file", n.Config.LogPath,
+		"buffer_size", n.Config.BufferSize,
+	)
+
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		defer close(alertChannel)
+		n.Logger.Info("Event processor started.")
+
+		for {
+			select {
+			case event, ok := <-eventChannel:
+				if !ok {
+					n.Logger.Info("Event channel close, stopping event processor.")
+					return
+				}
+
+				n.processEvent(event, alertChannel)
+			case <-ctx.Done():
+				n.Logger.Info("Context cancelled, stopping event processor")
+				return
+			}
+		}
+	}()
+
+	n.wg.Wait()
+	return nil
+}
+
+func (n *Nox) Stop() {
+	n.Logger.Info("Stopping Nox services")
+	if n.GeoIPDB != nil {
+		n.GeoIPDB.Close()
+	}
+
+	n.Logger.Info("Shutdown complete..")
 }
 
 func main() {
@@ -89,103 +211,75 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	cfg := &Config{
+		RulesPath:   getEnv("NOX_RULES_PATH", "detections/rules.yaml"),
+		IntelPath:   getEnv("NOX_INTEL_PATH", "intel/ip_watchlist.txt"),
+		LogPath:     "testdata/auth.log",
+		GeoIPDBPath: "testdata/GeoLite2-City.mmdb",
+		Elasticsearch: struct{ URL string }{
+			URL: "http://elasticsearch:9200",
+		},
+		GRPC: struct{ Addr string }{
+			Addr: ":50051",
+		},
+		Metrics: struct{ Addr string }{
+			Addr: ":9090",
+		},
+		BufferSize: 1000,
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	rulesPath := os.Getenv("NOX_RULES_PATH")
-	if rulesPath == "" {
-		rulesPath = "detections/rules.yaml"
-	}
-
-	intelPath := os.Getenv("NOX_INTEL_PATH")
-	if intelPath == "" {
-		intelPath = "intel/ip_watchlist.txt"
-	}
-
-	// --- INITIALIZE CORE COMPONENTS (DBs, Clients, Rules) ---
-	db, err := geoip2.Open("testdata/GeoLite2-City.mmdb")
-	if err != nil {
-		log.Fatalf("Error opening GeoIP database: %v", err)
-	}
-	defer db.Close()
-
-	esClient, err := storage.NewESClient("http://elasticsearch:9200")
-	if err != nil {
-		log.Fatalf("Could not create Elasticsearch client: %s", err)
-	}
-
-	time.Sleep(10 * time.Second)
-	esClient.EnsureIndex(context.Background(), "process_executed")
-	esClient.EnsureIndex(context.Background(), "sshd_accepted_password")
-	esClient.EnsureIndex(context.Background(), "sshd_failed_password")
-
-	yamlRules, err := rules.LoadRulesFromFile(rulesPath)
-	if err != nil {
-		log.Fatalf("could not load detection rules: %v", err)
-	}
-
-	stateManager := rules.NewStateManager()
-	if err := rules.LoadIPWatchlistFromFile(intelPath, stateManager); err != nil {
-		slog.Error("failed to load IP watchlist", "error", err)
-	}
-
-	// --- START BACKGROUND SERVICES (Goroutines) ---
-	eventChannel := make(chan model.Event, 1000) // channel that holds 100 events
-	alertChannel := make(chan model.Alert, 500)
-
-	go startMetricsServer(ctx)
-	go startGRPCServer(esClient)
-	go ingester.TailFile("testdata/auth.log", eventChannel)
-	go handleAlerts(alertChannel)
-
-	slog.Info("Nox IDS engine started",
-		"version", "0.1.0",
-		"log_file", "testdata/auth.log",
-		"buffer_size", 1000,
-	)
-
-	// --- START MAIN PROCESSING LOOP ---
-	// set up graceful shutdown
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// main processing loop
 	go func() {
-		defer close(alertChannel)
-
-		for {
-			select {
-			case event, ok := <-eventChannel:
-				if !ok {
-					slog.Info("Event channel closed, shutting down event processor")
-					return
-				}
-				processEvent(event, yamlRules, db, stateManager, esClient, alertChannel)
-			case <-ctx.Done():
-				slog.Info("Context cancelled, shutting down event processor")
-				return
-			}
-		}
+		<-signalChan
+		logger.Info("Shutdown signal received, gracefully stopping...")
+		cancel()
 	}()
 
-	// --- WAIT FOR SHUTDOWN SIGNAL ---
-	<-signalChan
-	slog.Info("Shutdown signal received, gracefull stopping...")
-	cancel()
+	// --- CREATE AND RUN ENGINE ---
+	nox, err := NewNox(cfg, logger)
+	if err != nil {
+		logger.Error("Failed to initialize application", "error", err)
+		os.Exit(1)
+	}
 
-	time.Sleep(2 * time.Second)
+	if err := nox.Run(ctx); err != nil {
+		logger.Error("Application runtime error", "error", err)
+		os.Exit(1)
+	}
+
+	nox.Stop()
 	slog.Info("Nox IDS engine stopped")
 }
 
-func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip2.Reader, stateManager *rules.StateManager, esClient *storage.ESClient, alertChannel chan<- model.Alert) {
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+
+	return fallback
+}
+
+func generateAlertID(alert model.Alert) string {
+	return fmt.Sprintf("%s-%d-%s",
+		alert.RuleName,
+		alert.Timestamp.Unix(),
+		alert.Source,
+	)
+}
+
+// --- Nox Methods (Engine Logic) ---
+func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert) {
 	eventsProcessedTotal.Inc()
 
-	go esClient.IndexEvent(context.Background(), event)
+	go n.ESClient.IndexEvent(context.Background(), event)
 
 	if event.Source != "localhost" && event.Source != "" {
 		ip := net.ParseIP(event.Source)
 		if ip != nil && !ip.IsPrivate() {
-			if record, err := db.City(ip); err == nil {
+			if record, err := n.GeoIPDB.City(ip); err == nil {
 				if event.Metadata == nil {
 					event.Metadata = make(map[string]string)
 				}
@@ -209,15 +303,15 @@ func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip
 		}
 	}
 
-	slog.Debug("Processing Event",
+	n.Logger.Debug("Processing Event",
 		"type", event.EventType,
 		"source", event.Source,
 		"timestamp", event.Timestamp,
 	)
 
-	triggeredAlerts := rules.EvaluateEvent(event, yamlRules, stateManager)
+	triggeredAlerts := rules.EvaluateEvent(event, n.Rules, n.StateMgr)
+	correlationAlerts := rules.RunCorrelationRules(event, triggeredAlerts, n.StateMgr)
 
-	correlationAlerts := rules.RunCorrelationRules(event, triggeredAlerts, stateManager)
 	if len(correlationAlerts) > 0 {
 		triggeredAlerts = append(triggeredAlerts, correlationAlerts...)
 	}
@@ -235,83 +329,113 @@ func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip
 	}
 }
 
-func handleAlerts(alertChan <-chan model.Alert) {
-	for alert := range alertChan {
-		alertsTriggeredTotal.WithLabelValues(alert.RuleName).Inc()
-		alertsBySeverityTotal.WithLabelValues(alert.Severity).Inc()
+func (n *Nox) startAlertHandler(ctx context.Context, alertChan <-chan model.Alert) {
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		n.Logger.Info("Alert handler started.")
+		for {
+			select {
+			case alert, ok := <-alertChan:
+				if !ok {
+					n.Logger.Info("Alert channel closed, stopping alert handler.")
+					return
+				}
+				alertsTriggeredTotal.WithLabelValues(alert.RuleName).Inc()
+				alertsBySeverityTotal.WithLabelValues(alert.Severity).Inc()
 
-		logLevel := slog.LevelWarn
+				logLevel := slog.LevelWarn
+				if alert.IsHighPriority() {
+					logLevel = slog.LevelError
+				}
 
-		if alert.IsHighPriority() {
-			logLevel = slog.LevelError
+				logger := n.Logger.With(
+					"alert_id", generateAlertID(alert),
+					"rule_name", alert.RuleName,
+					"severity", alert.Severity,
+					"source", alert.Source,
+					"timestamp", alert.Timestamp,
+				)
+
+				for key, value := range alert.Metadata {
+					logger = logger.With(key, value)
+				}
+
+				logger.Log(ctx, logLevel, alert.Message)
+
+			case <-ctx.Done():
+				n.Logger.Info("Context cancelled, stopping alert handler.")
+				return
+			}
 		}
-
-		logger := slog.With(
-			"alert_id", generateAlertID(alert),
-			"rule_name", alert.RuleName,
-			"severity", logLevel,
-			"source", alert.Source,
-			"timestamp", alert.Timestamp,
-		)
-
-		for key, value := range alert.Metadata {
-			logger = logger.With(key, value)
-		}
-
-		logger.Log(context.Background(), logLevel, alert.Message)
-
-	}
+	}()
 }
 
-func generateAlertID(alert model.Alert) string {
-	return fmt.Sprintf("%s-%d-%s",
-		alert.RuleName,
-		alert.Timestamp.Unix(),
-		alert.Source,
-	)
-}
-
-func startMetricsServer(ctx context.Context) {
+func (n *Nox) startMetricsServer(ctx context.Context) {
 	// set up server config
 	server := &http.Server{
-		Addr:    ":9090",
+		Addr:    n.Config.Metrics.Addr,
 		Handler: promhttp.Handler(),
 	}
+	n.wg.Add(1)
 
 	go func() {
-		slog.Info("Starting Metrics server", "address", server.Addr)
+		defer n.wg.Done()
+		n.Logger.Info("Starting Metrics server", "address", server.Addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("Metrics server error", "error", err)
 		}
+		n.Logger.Info("Metrics server stopped")
 	}()
 
-	<-ctx.Done()
-
-	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	// graceful shutdown
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Metrics server shutdown error", "error", err)
-	} else {
-		slog.Info("Metrics server stopped")
-	}
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Metrics server shutdown error", "error", err)
+		}
+	}()
 }
 
-func startGRPCServer(esClient *storage.ESClient) {
-	lis, err := net.Listen("tcp", ":50051")
+func (n *Nox) startGRPCServer(ctx context.Context) {
+	lis, err := net.Listen("tcp", n.Config.GRPC.Addr)
 	if err != nil {
 		slog.Error("Failed to listen for gRPC", "error", err)
 		return
 	}
 
 	s := grpc.NewServer()
-	apiServer := server.NewNoxAPIServer(esClient)
-
+	apiServer := server.NewNoxAPIServer(n.ESClient)
 	pb.RegisterNoxServiceServer(s, apiServer)
 
-	slog.Info("gRPC server started", "address", lis.Addr().String())
-	// s.Serve is a blocking call, it will run until the server is stopped.
-	if err := s.Serve(lis); err != nil {
-		slog.Error("gRPC server failed", "error", err)
-	}
+	n.wg.Add(1)
+
+	go func() {
+		defer n.wg.Done()
+		slog.Info("gRPC server started", "address", lis.Addr().String())
+		// s.Serve is a blocking call, it will run until the server is stopped.
+		if err := s.Serve(lis); err != nil {
+			slog.Error("gRPC server failed", "error", err)
+		}
+		n.Logger.Info("gRPC server stopped.")
+	}()
+
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		<-ctx.Done()
+		s.GracefulStop()
+	}()
+}
+
+func (n *Nox) startFileIngester(ctx context.Context, eventChannel chan<- model.Event) {
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		ingester.TailFile(n.Config.LogPath, eventChannel)
+		close(eventChannel)
+	}()
 }
