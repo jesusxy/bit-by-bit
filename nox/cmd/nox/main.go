@@ -10,6 +10,8 @@ import (
 	"nox/internal/ingester"
 	"nox/internal/model"
 	"nox/internal/rules"
+	"nox/internal/server"
+	"nox/internal/storage"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,6 +20,9 @@ import (
 	"github.com/oschwald/geoip2-golang"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
+
+	pb "nox/proto"
 )
 
 var (
@@ -84,39 +89,52 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	db, err := geoip2.Open("testdata/GeoLite2-City.mmdb")
-	if err != nil {
-		log.Fatalf("Error opening GeoIP database: %v", err)
-	}
-	defer db.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	rulesPath := os.Getenv("NOX_RULES_PATH")
 	if rulesPath == "" {
 		rulesPath = "detections/rules.yaml"
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	intelPath := os.Getenv("NOX_INTEL_PATH")
+	if intelPath == "" {
+		intelPath = "intel/ip_watchlist.txt"
+	}
+
+	// --- INITIALIZE CORE COMPONENTS (DBs, Clients, Rules) ---
+	db, err := geoip2.Open("testdata/GeoLite2-City.mmdb")
+	if err != nil {
+		log.Fatalf("Error opening GeoIP database: %v", err)
+	}
+	defer db.Close()
+
+	esClient, err := storage.NewESClient("http://elasticsearch:9200")
+	if err != nil {
+		log.Fatalf("Could not create Elasticsearch client: %s", err)
+	}
+
+	time.Sleep(10 * time.Second)
+	esClient.EnsureIndex(context.Background(), "process_executed")
+	esClient.EnsureIndex(context.Background(), "sshd_accepted_password")
+	esClient.EnsureIndex(context.Background(), "sshd_failed_password")
 
 	yamlRules, err := rules.LoadRulesFromFile(rulesPath)
 	if err != nil {
 		log.Fatalf("could not load detection rules: %v", err)
 	}
 
-	eventChannel := make(chan model.Event, 1000) // channel that holds 100 events
-	alertChannel := make(chan model.Alert, 500)
 	stateManager := rules.NewStateManager()
-
-	intelPath := os.Getenv("NOX_INTEL_PATH")
-	if intelPath == "" {
-		intelPath = "intel/ip_watchlist.txt"
-	}
 	if err := rules.LoadIPWatchlistFromFile(intelPath, stateManager); err != nil {
 		slog.Error("failed to load IP watchlist", "error", err)
 	}
 
-	// start background services
+	// --- START BACKGROUND SERVICES (Goroutines) ---
+	eventChannel := make(chan model.Event, 1000) // channel that holds 100 events
+	alertChannel := make(chan model.Alert, 500)
+
 	go startMetricsServer(ctx)
+	go startGRPCServer(esClient)
 	go ingester.TailFile("testdata/auth.log", eventChannel)
 	go handleAlerts(alertChannel)
 
@@ -126,6 +144,7 @@ func main() {
 		"buffer_size", 1000,
 	)
 
+	// --- START MAIN PROCESSING LOOP ---
 	// set up graceful shutdown
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -141,7 +160,7 @@ func main() {
 					slog.Info("Event channel closed, shutting down event processor")
 					return
 				}
-				processEvent(event, yamlRules, db, stateManager, alertChannel)
+				processEvent(event, yamlRules, db, stateManager, esClient, alertChannel)
 			case <-ctx.Done():
 				slog.Info("Context cancelled, shutting down event processor")
 				return
@@ -149,6 +168,7 @@ func main() {
 		}
 	}()
 
+	// --- WAIT FOR SHUTDOWN SIGNAL ---
 	<-signalChan
 	slog.Info("Shutdown signal received, gracefull stopping...")
 	cancel()
@@ -157,8 +177,10 @@ func main() {
 	slog.Info("Nox IDS engine stopped")
 }
 
-func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip2.Reader, stateManager *rules.StateManager, alertChannel chan<- model.Alert) {
+func processEvent(event model.Event, yamlRules []rules.RuleDefinition, db *geoip2.Reader, stateManager *rules.StateManager, esClient *storage.ESClient, alertChannel chan<- model.Alert) {
 	eventsProcessedTotal.Inc()
+
+	go esClient.IndexEvent(context.Background(), event)
 
 	if event.Source != "localhost" && event.Source != "" {
 		ip := net.ParseIP(event.Source)
@@ -272,5 +294,24 @@ func startMetricsServer(ctx context.Context) {
 		slog.Error("Metrics server shutdown error", "error", err)
 	} else {
 		slog.Info("Metrics server stopped")
+	}
+}
+
+func startGRPCServer(esClient *storage.ESClient) {
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		slog.Error("Failed to listen for gRPC", "error", err)
+		return
+	}
+
+	s := grpc.NewServer()
+	apiServer := server.NewNoxAPIServer(esClient)
+
+	pb.RegisterNoxServiceServer(s, apiServer)
+
+	slog.Info("gRPC server started", "address", lis.Addr().String())
+	// s.Serve is a blocking call, it will run until the server is stopped.
+	if err := s.Serve(lis); err != nil {
+		slog.Error("gRPC server failed", "error", err)
 	}
 }
