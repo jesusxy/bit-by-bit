@@ -84,21 +84,26 @@ func init() {
 	prometheus.MustRegister(alertsBySeverityTotal)
 }
 
+type ESConfig struct {
+	URL string
+}
+
+type GRPCConfig struct {
+	Addr string
+}
+
+type MetricsConfig struct {
+	Addr string
+}
 type Config struct {
 	RulesPath     string
 	IntelPath     string
 	LogPath       string
 	GeoIPDBPath   string
-	Elasticsearch struct {
-		URL string
-	}
-	GRPC struct {
-		Addr string
-	}
-	Metrics struct {
-		Addr string
-	}
-	BufferSize int
+	Elasticsearch ESConfig
+	GRPC          GRPCConfig
+	Metrics       MetricsConfig
+	BufferSize    int
 }
 
 type Nox struct {
@@ -216,13 +221,13 @@ func main() {
 		IntelPath:   getEnv("NOX_INTEL_PATH", "intel/ip_watchlist.txt"),
 		LogPath:     "testdata/auth.log",
 		GeoIPDBPath: "testdata/GeoLite2-City.mmdb",
-		Elasticsearch: struct{ URL string }{
+		Elasticsearch: ESConfig{
 			URL: "http://elasticsearch:9200",
 		},
-		GRPC: struct{ Addr string }{
+		GRPC: GRPCConfig{
 			Addr: ":50051",
 		},
-		Metrics: struct{ Addr string }{
+		Metrics: MetricsConfig{
 			Addr: ":9090",
 		},
 		BufferSize: 1000,
