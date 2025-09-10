@@ -36,15 +36,6 @@ type PostBruteForceLoginState struct {
 	SuccessfulLogins map[string][]PostBruteForceInfo // Key: SSHD PID of the successful login session.
 }
 
-type ProcessExecution struct {
-	Timestamp   time.Time
-	ProcessName string
-	Command     string
-	PID         string
-	PPID        string
-	UID         string
-}
-
 type ProcessExecutionHistoryState struct {
 	mu      sync.Mutex
 	History map[string][]ProcessExecution // Key: Source Host (e.g., "localhost")
