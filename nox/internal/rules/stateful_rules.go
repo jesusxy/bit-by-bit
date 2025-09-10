@@ -145,20 +145,29 @@ func (r *RapidProcessExecutionRule) Evaluate(event model.Event, state *StateMana
 	defer s.mu.Unlock()
 
 	source := event.Source
-	history := s.History[source]
+	now := event.Timestamp
+	cutoff := now.Add(-r.Window)
 
-	if len(history) == 0 {
-		return nil
+	currentProc := ProcessExecution{
+		Timestamp:   event.Timestamp,
+		ProcessName: event.Metadata["process_name"],
+		Command:     event.Metadata["command"],
+		PID:         event.Metadata["pid"],
+		PPID:        event.Metadata["ppid"],
+		UID:         event.Metadata["uid"],
 	}
 
-	cutoff := event.Timestamp.Add(-r.Window) // is this the right way of calculating if we are passed the threshold?
-	recentCount := 0
+	history := append(s.History[source], currentProc)
 
+	var recentHistory []ProcessExecution
 	for _, proc := range history {
-		if proc.Timestamp.After(cutoff) { // is this the right way of calculating if we are passed the threshold?
-			recentCount++
+		if proc.Timestamp.After(cutoff) {
+			recentHistory = append(recentHistory, proc)
 		}
 	}
+
+	s.History[source] = recentHistory
+	recentCount := len(recentHistory)
 
 	if recentCount >= r.Threshold {
 		return &model.Alert{
