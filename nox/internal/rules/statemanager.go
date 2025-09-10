@@ -26,11 +26,6 @@ type NewAccountState struct {
 	CreationTimes map[string]time.Time // Key: Username, Value: Timestamp of creation.
 }
 
-type PostBruteForceInfo struct {
-	LoginTime time.Time
-	SourceIP  string
-}
-
 type PostBruteForceLoginState struct {
 	mu               sync.Mutex
 	SuccessfulLogins map[string][]PostBruteForceInfo // Key: SSHD PID of the successful login session.
