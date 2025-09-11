@@ -2,7 +2,7 @@ package ingester
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"nox/internal/model"
 
@@ -40,10 +40,10 @@ func (i *Ingester) ParseLog(logline string) (model.Event, error) {
 	return model.Event{}, model.ErrIgnoredLine
 }
 
-func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.Event) {
+func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.Event) error {
 	t, err := tail.TailFile(fpath, tail.Config{Follow: true, ReOpen: true, Logger: tail.DiscardingLogger})
 	if err != nil {
-		log.Fatalf("failed to tail file: %v", err)
+		return fmt.Errorf("failed to tail file: %v", err)
 	}
 
 	i.logger.Info("Started tailling log file", "path", fpath)
@@ -53,10 +53,10 @@ func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.E
 		case <-ctx.Done():
 			t.Stop()
 			i.logger.Info("Stopping log file tailing due to context cancellation.", "path", fpath)
-			return
-		case line := <-t.Lines:
-			if line == nil {
-				continue
+			return nil
+		case line, ok := <-t.Lines:
+			if !ok {
+				return nil
 			}
 			if line.Text == "" {
 				continue
@@ -67,11 +67,12 @@ func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.E
 				i.logger.Debug("Ignoring log line", "line", line.Text)
 				continue
 			} else if err != nil {
-				slog.Error("failed to parse line", "error", err, "line", line.Text)
-				continue
+				i.logger.Error("failed to parse line", "error", err, "line", line.Text)
+				break
 			}
-			slog.Debug("Parsed event", "type", event.EventType, "source", event.Source)
+			i.logger.Debug("Parsed event", "type", event.EventType, "source", event.Source)
 			ch <- event
+			break
 		}
 	}
 }
