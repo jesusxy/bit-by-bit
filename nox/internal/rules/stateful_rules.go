@@ -124,7 +124,7 @@ type RapidProcessExecutionRule struct {
 	Window    time.Duration
 }
 
-func NewRapidProcessExectionRuile() Rule {
+func NewRapidProcessExecutionRuile() Rule {
 	return &RapidProcessExecutionRule{
 		Threshold: 10,
 		Window:    30 * time.Second,
@@ -204,9 +204,9 @@ func (r *IPWatchlistRule) Evaluate(event model.Event, state *StateManager) *mode
 	}
 
 	s := state.IPWatchlist
-	s.mu.RLock()
+	s.mu.Lock()
 	isMatch, found := s.Watchlist[event.Source]
-	s.mu.RUnlock()
+	s.mu.Unlock()
 
 	if found && isMatch {
 		return &model.Alert{
