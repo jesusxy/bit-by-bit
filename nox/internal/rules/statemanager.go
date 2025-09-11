@@ -28,7 +28,7 @@ type NewAccountState struct {
 
 type PostBruteForceLoginState struct {
 	mu               sync.Mutex
-	SuccessfulLogins map[string][]PostBruteForceInfo // Key: SSHD PID of the successful login session.
+	SuccessfulLogins map[string]PostBruteForceInfo // Key: SSHD PID of the successful login session.
 }
 
 type ProcessExecutionHistoryState struct {
@@ -73,7 +73,7 @@ func NewStateManager() *StateManager {
 			CreationTimes: make(map[string]time.Time), // can this be renamed a bit more specifically?
 		},
 		PostBruteForceLogins: &PostBruteForceLoginState{
-			SuccessfulLogins: make(map[string][]PostBruteForceInfo),
+			SuccessfulLogins: make(map[string]PostBruteForceInfo),
 		},
 		ProcessExecutionHistory: &ProcessExecutionHistoryState{
 			History: make(map[string][]ProcessExecution),
