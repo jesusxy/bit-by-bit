@@ -12,8 +12,14 @@ type FailedLoginState struct {
 }
 
 type IPWatchlistState struct {
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	Watchlist map[string]bool // Key: IP Address
+}
+
+func (s *IPWatchlistState) Set(watchlist map[string]bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Watchlist = watchlist
 }
 
 type LoginLocationState struct {
@@ -70,7 +76,7 @@ func NewStateManager() *StateManager {
 			Locations: make(map[string]map[string]bool),
 		},
 		NewAccountTracker: &NewAccountState{
-			CreationTimes: make(map[string]time.Time), // can this be renamed a bit more specifically?
+			CreationTimes: make(map[string]time.Time),
 		},
 		PostBruteForceLogins: &PostBruteForceLoginState{
 			SuccessfulLogins: make(map[string]PostBruteForceInfo),
