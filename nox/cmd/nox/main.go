@@ -107,13 +107,13 @@ type Config struct {
 }
 
 type Nox struct {
-	Config   *Config
-	Logger   *slog.Logger
-	ESClient *storage.ESClient
-	GeoIPDB  *geoip2.Reader
-	Rules    []rules.RuleDefinition
-	StateMgr *rules.StateManager
-	wg       sync.WaitGroup
+	Config     *Config
+	Logger     *slog.Logger
+	ESClient   *storage.ESClient
+	GeoIPDB    *geoip2.Reader
+	RuleEngine *rules.Engine
+	wg         sync.WaitGroup
+	ingester   *ingester.Ingester
 }
 
 func NewNox(cfg *Config, logger *slog.Logger) (*Nox, error) {
@@ -134,18 +134,24 @@ func NewNox(cfg *Config, logger *slog.Logger) (*Nox, error) {
 		return nil, fmt.Errorf("could not load detection rules: %w", err)
 	}
 
-	stateManager := rules.NewStateManager()
-	if err := rules.LoadIPWatchlistFromFile(cfg.IntelPath, stateManager); err != nil {
-		logger.Error("failed to load IP watchlist", "error", err)
+	ipWatchlist, err := rules.LoadIPWatchlistFromFile(cfg.IntelPath)
+	if err != nil {
+		logger.Warn("failed to load IP watchlist", "error", err)
 	}
 
+	stateManager := rules.NewStateManager()
+	stateManager.IPWatchlist.Set(ipWatchlist)
+
+	ruleEngine := rules.NewEngine(logger, stateManager, yamlRules)
+	appIngester := ingester.NewIngester(logger)
+
 	return &Nox{
-		Config:   cfg,
-		Logger:   logger,
-		ESClient: esClient,
-		GeoIPDB:  db,
-		Rules:    yamlRules,
-		StateMgr: stateManager,
+		Config:     cfg,
+		Logger:     logger,
+		ESClient:   esClient,
+		GeoIPDB:    db,
+		RuleEngine: ruleEngine,
+		ingester:   appIngester,
 	}, nil
 
 }
@@ -302,8 +308,6 @@ func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert) {
 					event.Metadata["longitude"] = fmt.Sprintf("%.4f", record.Location.Longitude)
 				}
 
-			} else {
-				slog.Debug("GeoIP lookup failed", "ip", event.Source, "error", err)
 			}
 		}
 	}
@@ -314,12 +318,7 @@ func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert) {
 		"timestamp", event.Timestamp,
 	)
 
-	triggeredAlerts := rules.EvaluateEvent(event, n.Rules, n.StateMgr)
-	correlationAlerts := rules.RunCorrelationRules(event, triggeredAlerts, n.StateMgr)
-
-	if len(correlationAlerts) > 0 {
-		triggeredAlerts = append(triggeredAlerts, correlationAlerts...)
-	}
+	triggeredAlerts := n.RuleEngine.EvaluateEvent(event)
 
 	for _, alert := range triggeredAlerts {
 		select {
@@ -440,7 +439,9 @@ func (n *Nox) startFileIngester(ctx context.Context, eventChannel chan<- model.E
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		ingester.TailFile(n.Config.LogPath, eventChannel)
-		close(eventChannel)
+		defer close(eventChannel)
+		if err := n.ingester.TailFile(ctx, n.Config.LogPath, eventChannel); err != nil {
+			n.Logger.Error("File ingester stopped with an error", "error", err)
+		}
 	}()
 }
