@@ -33,7 +33,10 @@ func (i *Ingester) ParseLog(logline string) (model.Event, error) {
 		event, err := parser.Parse(logline)
 		if err == model.ErrIgnoredLine {
 			continue
+		} else if err != nil {
+			return model.Event{}, fmt.Errorf("parser failed on recognized line: %w", err)
 		}
+
 		return event, err
 	}
 
@@ -72,7 +75,6 @@ func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.E
 			}
 			i.logger.Debug("Parsed event", "type", event.EventType, "source", event.Source)
 			ch <- event
-			break
 		}
 	}
 }
