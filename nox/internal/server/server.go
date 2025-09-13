@@ -61,6 +61,17 @@ type esSearchResponse struct {
 	} `json:"hits"`
 }
 
+type esAggregationResponse struct {
+	Aggregations struct {
+		TopEvents struct {
+			Buckets []struct {
+				Key      string  `json:"key"`
+				DocCount float64 `json:"doc_count"`
+			} `json:"buckets"`
+		} `json:"top_events"`
+	} `json:"aggregations"`
+}
+
 func NewNoxAPIServer(esClient *storage.ESClient) *NoxAPIServer {
 	return &NoxAPIServer{esClient: esClient}
 }
@@ -150,9 +161,140 @@ func (s *NoxAPIServer) SearchEvents(ctx context.Context, req *pb.SearchRequest) 
 }
 
 func (s *NoxAPIServer) GetProcessAncestry(ctx context.Context, req *pb.PIDRequest) (*pb.ProcessHistoryResponse, error) {
-	return &pb.ProcessHistoryResponse{}, nil
+	slog.Info("Handling GetProcessAncestry request", "pid", req.Pid)
+
+	var ancestry []*pb.ProcessExecutionEvent
+	currentPid := req.Pid
+	const maxDepth = 20
+
+	for i := 0; i < maxDepth; i++ {
+		if currentPid == "" || currentPid == "0" || currentPid == "1" {
+			break
+		}
+
+		size := 1
+		query := ESQuery{
+			Query: &Query{
+				Bool: &BoolClause{
+					Must: []any{
+						MatchClause{
+							Match: map[string]string{"Metadata.pid": currentPid},
+						},
+					},
+				},
+			},
+			Sort: []map[string]string{{"Timestamp": "desc"}},
+			Size: &size,
+		}
+
+		queryBytes, err := json.Marshal(query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build query: %w", err)
+		}
+
+		res, err := s.esClient.Client.Search(
+			s.esClient.Client.Search.WithContext(ctx),
+			s.esClient.Client.Search.WithIndex("process_executed"),
+			s.esClient.Client.Search.WithBody(bytes.NewReader(queryBytes)),
+		)
+
+		if err != nil || res.IsError() {
+			break
+		}
+		defer res.Body.Close()
+
+		var r esSearchResponse
+		if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+			break
+		}
+
+		if len(r.Hits.Hits) == 0 {
+			break
+		}
+
+		event := r.Hits.Hits[0].Source
+		ancestry = append(ancestry, &pb.ProcessExecutionEvent{
+			Timestamp:   timestamppb.New(event.Timestamp),
+			ProcessName: event.Metadata["process_name"],
+			Command:     event.Metadata["command"],
+			Pid:         event.Metadata["pid"],
+			Ppid:        event.Metadata["ppid"],
+			Uid:         event.Metadata["uid"],
+		})
+
+		currentPid = event.Metadata["ppid"]
+	}
+
+	return &pb.ProcessHistoryResponse{Events: ancestry}, nil
 }
 
 func (s *NoxAPIServer) GetTopEvents(ctx context.Context, req *pb.TopNRequest) (*pb.TopNResponse, error) {
-	return &pb.TopNResponse{}, nil
+	slog.Info("Handling GetTopEvents request", "field", req.Field, "n", req.N)
+	if req.Field == "" || req.N <= 0 {
+		return nil, fmt.Errorf("field must be specified and N must be positive")
+	}
+
+	size := 0
+	aggregationField := "Metadata." + req.Field + ".keyword"
+
+	query := ESQuery{
+		Size: &size,
+		Aggs: map[string]any{
+			"top_events": map[string]any{
+				"terms": map[string]any{
+					"field": aggregationField,
+					"size":  req.N,
+				},
+			},
+		},
+	}
+
+	if req.StartTime.IsValid() && req.EndTime.IsValid() {
+		query.Query = &Query{
+			Bool: &BoolClause{
+				Filter: []any{
+					RangeClause{
+						Range: map[string]TimeRange{
+							"Timestamp": {
+								GTE: req.StartTime.AsTime().Format(time.RFC3339),
+								LTE: req.EndTime.AsTime().Format(time.RFC3339),
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	queryBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build query: %w", err)
+	}
+
+	res, err := s.esClient.Client.Search(
+		s.esClient.Client.Search.WithContext(ctx),
+		s.esClient.Client.Search.WithIndex("process_executed"),
+		s.esClient.Client.Search.WithBody(bytes.NewReader(queryBytes)),
+	)
+
+	if err != nil || res.IsError() {
+		return nil, fmt.Errorf("aggregation request failed")
+	}
+
+	defer res.Body.Close()
+
+	var r esAggregationResponse
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		return nil, fmt.Errorf("failed to decode aggregation response: %w", err)
+	}
+
+	var results []*pb.TopNResponse_Count
+	for _, bucket := range r.Aggregations.TopEvents.Buckets {
+		results = append(results, &pb.TopNResponse_Count{
+			Item:  bucket.Key,
+			Count: int64(bucket.DocCount),
+		})
+	}
+
+	return &pb.TopNResponse{Results: results}, nil
 }
