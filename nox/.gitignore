@@ -1,1 +1,5 @@
 testdata/GeoLite2-City.mmdb
+
+# binaries
+log-simulator
+nox-cli
