@@ -37,7 +37,7 @@ func NewSSHDParser() Parser {
 
 func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 	if matches := p.failedLoginRegex.FindStringSubmatch(logLine); len(matches) > 0 {
-		ts, err := time.Parse(sshdTimeFormat, matches[1])
+		ts, err := p.parseSSHDTimestamp(matches[1])
 		if err != nil {
 			return model.Event{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
 		}
@@ -51,7 +51,7 @@ func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 	}
 
 	if matches := p.acceptedLoginRegex.FindStringSubmatch(logLine); len(matches) > 0 {
-		ts, err := time.Parse(sshdTimeFormat, matches[1])
+		ts, err := p.parseSSHDTimestamp(matches[1])
 		if err != nil {
 			return model.Event{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
 		}
@@ -68,6 +68,19 @@ func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 	}
 
 	return model.Event{}, model.ErrIgnoredLine
+}
+
+func (p *sshdParser) parseSSHDTimestamp(timstamp string) (time.Time, error) {
+	ts, err := time.Parse(sshdTimeFormat, timstamp)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
+	}
+
+	if ts.Year() == 0 {
+		ts = ts.AddDate(time.Now().UTC().Year(), 0, 0)
+	}
+
+	return ts, nil
 }
 
 type execsnoopParser struct {
