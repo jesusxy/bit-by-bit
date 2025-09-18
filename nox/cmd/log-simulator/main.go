@@ -143,11 +143,21 @@ func runScenario(name string) {
 		pidLogin, portLogin := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		loginLog := fmt.Sprintf(acceptedLoginTemplate, timestampLogin, pidLogin, newUser, loginIP, portLogin)
 		f.WriteString(loginLog)
+	case "rapid":
+		log.Println("Injecting: Rapid Process Execution Burst (15 processes).....")
+		timestamp := time.Now().UTC().Format(execsnoopTimeFormat)
+		pid, ppid := rand.Intn(90000)+1000, rand.Intn(90000)+1000
+		for i := 0; i < 15; i++ {
+			logLine := fmt.Sprintf(execsnoopTemplate, timestamp, 1000, "ls", pid, ppid, 0, "/bin/ls")
+			f.WriteString(logLine)
+			time.Sleep(100 * time.Millisecond)
+		}
+		log.Println("--> A single 'RapidProcessExecution' alert should have fired.")
 	default:
-		log.Fatalf("Unknown test case: %s", name)
+		log.Fatalf("Unknown scenario: %s. Available scenarios: bruteforce, download, newuser, rapid", name)
 	}
 
-	log.Println("Simulation finished.")
+	log.Println("Scenario finished.")
 }
 
 func runContinousSimulation() {
