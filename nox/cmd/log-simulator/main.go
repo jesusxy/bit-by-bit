@@ -147,6 +147,7 @@ func runScenario(name string) {
 		pidLogin, portLogin := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		loginLog := fmt.Sprintf(acceptedLoginTemplate, timestampLogin, pidLogin, newUser, loginIP, portLogin)
 		f.WriteString(loginLog)
+		log.Println("--> A 'CorrelatedNewAccountUsage' alert should have fired.")
 	case "rapid":
 		log.Println("Injecting: Rapid Process Execution Burst (15 processes).....")
 		timestamp := time.Now().UTC().Format(execsnoopTimeFormat)
