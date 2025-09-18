@@ -18,6 +18,11 @@ import (
 *	2.891    1236   567    0   /bin/ps aux
 **/
 
+const (
+	sshdTimeFormat      = "Jan _2 15:04:05"
+	execsnoopTimeFormat = time.RFC3339
+)
+
 type sshdParser struct {
 	failedLoginRegex   *regexp.Regexp
 	acceptedLoginRegex *regexp.Regexp
@@ -25,48 +30,39 @@ type sshdParser struct {
 
 func NewSSHDParser() Parser {
 	return &sshdParser{
-		failedLoginRegex:   regexp.MustCompile(`Failed password for .*?(\S+) from ([\d\.]+) port \d+ ssh2`),
-		acceptedLoginRegex: regexp.MustCompile(`sshd\[(\d+)\]: Accepted password for (\S+) from ([\d\.]+) port \d+ ssh2`),
+		failedLoginRegex:   regexp.MustCompile(`^(\w+\s+\d+\s+[\d:]+)\s+my-server sshd\[\d+\]: Failed password for .*?(\S+) from ([\d\.]+)`),
+		acceptedLoginRegex: regexp.MustCompile(`^(\w+\s+\d+\s+[\d:]+)\s+my-server sshd\[(\d+)\]: Accepted password for (\S+) from ([\d\.]+)`),
 	}
-}
-
-func parseLogTimestamp(logLine string) (time.Time, error) {
-	timestampStr := strings.Join(strings.Fields(logLine)[0:3], " ")
-	t, err := time.Parse("Jan 2 15:04:05", timestampStr)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("could not parse timestamp: %w", err)
-	}
-
-	return t.AddDate(time.Now().UTC().Year(), 0, 0), nil
 }
 
 func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 	if matches := p.failedLoginRegex.FindStringSubmatch(logLine); len(matches) > 0 {
-		ts, err := parseLogTimestamp(logLine)
+		ts, err := time.Parse(sshdTimeFormat, matches[1])
 		if err != nil {
-			ts = time.Now().UTC()
+			return model.Event{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
 		}
 
 		return model.Event{
 			Timestamp: ts,
 			EventType: "SSHD_Failed_Password",
-			Source:    matches[2],
-			Metadata:  map[string]string{"user": matches[1]},
+			Source:    matches[3],
+			Metadata:  map[string]string{"user": matches[2]},
 		}, nil
 	}
 
 	if matches := p.acceptedLoginRegex.FindStringSubmatch(logLine); len(matches) > 0 {
-		ts, err := parseLogTimestamp(logLine)
+		ts, err := time.Parse(sshdTimeFormat, matches[1])
 		if err != nil {
-			ts = time.Now().UTC()
+			return model.Event{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
 		}
 
 		return model.Event{
 			Timestamp: ts,
 			EventType: "SSHD_Accepted_Password",
+			Source:    matches[4],
 			Metadata: map[string]string{
-				"user":     matches[2],
-				"sshd_pid": matches[1],
+				"user":     matches[3],
+				"sshd_pid": matches[2],
 			},
 		}, nil
 	}
@@ -75,11 +71,12 @@ func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 }
 
 type execsnoopParser struct {
+	// Regex captures: 1=Timestamp, 2=UID, 3=ProcessName, 4=PID, 5=PPID, 6=Retval, 7=Args
 	regex *regexp.Regexp
 }
 
 func NewExecsnoopParser() Parser {
-	regex := regexp.MustCompile(`^\S+\s+(\d+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$`)
+	regex := regexp.MustCompile(`^([\d\-T:Z]+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$`)
 	return &execsnoopParser{
 		regex: regex,
 	}
@@ -87,8 +84,13 @@ func NewExecsnoopParser() Parser {
 
 func (p *execsnoopParser) Parse(logLine string) (model.Event, error) {
 	matches := p.regex.FindStringSubmatch(logLine)
-	if len(matches) == 0 {
+	if len(matches) < 8 {
 		return model.Event{}, model.ErrIgnoredLine
+	}
+
+	ts, err := time.Parse(execsnoopTimeFormat, matches[1])
+	if err != nil {
+		return model.Event{}, fmt.Errorf("failed to parse execsnoop timestamp: %w", err)
 	}
 
 	// matches[1]: UID
@@ -98,16 +100,16 @@ func (p *execsnoopParser) Parse(logLine string) (model.Event, error) {
 	// matches[5]: return code
 	// matches[6]: full command
 	return model.Event{
-		Timestamp: time.Now().UTC(),
+		Timestamp: ts,
 		EventType: "Process_Executed",
 		Source:    "localhost",
 		Metadata: map[string]string{
-			"uid":          strings.TrimSpace(matches[1]),
-			"process_name": strings.TrimSpace(matches[2]),
-			"pid":          strings.TrimSpace(matches[3]),
-			"ppid":         strings.TrimSpace(matches[4]),
-			"return_code":  strings.TrimSpace(matches[5]),
-			"command":      strings.TrimSpace(matches[6]),
+			"uid":          strings.TrimSpace(matches[2]),
+			"process_name": strings.TrimSpace(matches[3]),
+			"pid":          strings.TrimSpace(matches[4]),
+			"ppid":         strings.TrimSpace(matches[5]),
+			"return_code":  strings.TrimSpace(matches[6]),
+			"command":      strings.TrimSpace(matches[7]),
 		},
 	}, nil
 }
