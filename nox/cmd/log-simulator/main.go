@@ -73,7 +73,7 @@ func runScenario(name string) {
 
 		log.Println("Injecting: SSH Brute-Force")
 		for i := 0; i < 6; i++ {
-			timestamp := time.Now().Format("Jan  2 15:04:05")
+			timestamp := time.Now().Format(sshdTimeFormat)
 			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 			failedLog := fmt.Sprintf(failedLoginTemplate, timestamp, pid, "root", attackIP, port)
 			f.WriteString(failedLog)
@@ -83,7 +83,7 @@ func runScenario(name string) {
 		time.Sleep(3 * time.Second)
 
 		log.Println("Injecting: Successful Login post-brute-force")
-		timestampSuccess := time.Now().Format("Jan  2 15:04:05")
+		timestampSuccess := time.Now().Format(sshdTimeFormat)
 		sshdPID, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, sshdPID, "root", attackIP, portSuccess)
 		f.WriteString(successLog)
@@ -92,7 +92,7 @@ func runScenario(name string) {
 
 		// 5. Attacker tries to cover their tracks
 		log.Println("Injecting: Defense Evasion (history clear)")
-		timestampEvasion := time.Now().UTC().Format(execsnoopTemplate)
+		timestampEvasion := time.Now().UTC().Format(execsnoopTimeFormat)
 		pidEvasion := rand.Intn(9000) + 1000
 		ppidEvasion := sshdPID
 
@@ -117,12 +117,11 @@ func runScenario(name string) {
 
 		// 3. Attacker executes the payload
 		log.Println("Injecting: Payload Execution (bash)")
-		timestamp2 := time.Now().Format("15:04:05")
+		timestamp2 := time.Now().UTC().Format(execsnoopTimeFormat)
 		pid2, ppid2 := rand.Intn(9000)+1000, rand.Intn(9000)+1000
 		executeLog := fmt.Sprintf(execsnoopTemplate, timestamp2, 1000, "bash", pid2, ppid2, 0, "bash /tmp/payload.sh")
 		f.WriteString(executeLog)
-
-		log.Println("Simulation finished.")
+		log.Println("--> A 'CorrelatedDownloadAndExecute' alert should have fired.")
 	case "newuser":
 		// --- Test Case for New Account & Immediate Use ---
 		log.Println("Starting targeted log simulation for 'New Account & Immediate Use'...")
