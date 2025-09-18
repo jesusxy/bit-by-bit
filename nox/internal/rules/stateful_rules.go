@@ -122,12 +122,14 @@ func (r *LoginLocationRule) Evaluate(event model.Event, state *StateManager) *mo
 type RapidProcessExecutionRule struct {
 	Threshold int
 	Window    time.Duration
+	Cooldown  time.Duration
 }
 
 func NewRapidProcessExecutionRuile() Rule {
 	return &RapidProcessExecutionRule{
 		Threshold: 10,
 		Window:    30 * time.Second,
+		Cooldown:  5 * time.Minute,
 	}
 }
 
@@ -170,6 +172,14 @@ func (r *RapidProcessExecutionRule) Evaluate(event model.Event, state *StateMana
 	recentCount := len(recentHistory)
 
 	if recentCount >= r.Threshold {
+		if lastAlertedTime, ok := s.AlertedHosts[source]; ok {
+			if now.Sub(lastAlertedTime) < r.Cooldown {
+				return nil
+			}
+		}
+
+		s.AlertedHosts[source] = now
+
 		return &model.Alert{
 			RuleName:  r.Name(),
 			Message:   fmt.Sprintf("Detected %d processes executed in %s from %s", recentCount, r.Window, source),
