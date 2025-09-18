@@ -38,8 +38,9 @@ type PostBruteForceLoginState struct {
 }
 
 type ProcessExecutionHistoryState struct {
-	mu      sync.Mutex
-	History map[string][]ProcessExecution // Key: Source Host (e.g., "localhost")
+	mu           sync.Mutex
+	History      map[string][]ProcessExecution // Key: Source Host (e.g., "localhost")
+	AlertedHosts map[string]time.Time
 }
 
 type StagedPayloadState struct {
@@ -69,9 +70,7 @@ func NewStateManager() *StateManager {
 			Attempts:   make(map[string][]time.Time),
 			AlertedIPs: make(map[string]bool),
 		},
-		IPWatchlist: &IPWatchlistState{
-			Watchlist: make(map[string]bool),
-		},
+		IPWatchlist: &IPWatchlistState{},
 		LoginLocations: &LoginLocationState{
 			Locations: make(map[string]map[string]bool),
 		},
@@ -82,7 +81,8 @@ func NewStateManager() *StateManager {
 			SuccessfulLogins: make(map[string]PostBruteForceInfo),
 		},
 		ProcessExecutionHistory: &ProcessExecutionHistoryState{
-			History: make(map[string][]ProcessExecution),
+			History:      make(map[string][]ProcessExecution),
+			AlertedHosts: make(map[string]time.Time),
 		},
 		StagedPayloads: &StagedPayloadState{
 			Payloads: make(map[string]time.Time),
