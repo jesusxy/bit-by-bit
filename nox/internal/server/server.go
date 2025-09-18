@@ -88,7 +88,7 @@ func (s *NoxAPIServer) SearchEvents(ctx context.Context, req *pb.SearchRequest) 
 	}
 
 	var filterClauses []any
-	if req.StartTime.isValid() && req.EndTime.IsValid() {
+	if req.StartTime.IsValid() && req.EndTime.IsValid() {
 		filterClauses = append(filterClauses, RangeClause{
 			Range: map[string]TimeRange{
 				"Timestamp": {
