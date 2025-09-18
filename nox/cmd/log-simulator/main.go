@@ -44,6 +44,10 @@ func main() {
 
 	flag.Parse()
 
+	if err := os.Truncate(logFile, 0); err != nil {
+		log.Fatalf("Failed to clear log file: %v", err)
+	}
+
 	if *scenario != "" {
 		runScenario(*scenario)
 	} else if *continuous {
