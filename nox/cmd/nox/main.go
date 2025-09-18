@@ -160,7 +160,25 @@ func NewNox(cfg *Config, logger *slog.Logger) (*Nox, error) {
 func (n *Nox) Run(ctx context.Context) error {
 	// ---- Ensure Elasticsearch Indices exists ---
 	n.Logger.Info("Waiting for Elasticsearch...")
-	time.Sleep(10 * time.Second)
+	const maxRetries = 5
+	var esReady bool
+	for i := range maxRetries {
+		if _, err := n.ESClient.Client.Ping(); err == nil {
+			n.Logger.Info("Successfully connected to Elasticsearch.")
+			esReady = true
+			break
+		}
+
+		wait := time.Duration(i*2) * time.Second
+		n.Logger.Warn("Elasticsearch not ready, retrying...", "wait_time", wait)
+		time.Sleep(wait)
+	}
+
+	if !esReady {
+		n.Logger.Error("Could not connect to Elasticsearch after multiple retries. Shutting down.")
+		return fmt.Errorf("elasticsearch not available")
+	}
+
 	n.ESClient.EnsureIndex(ctx, "process_executed")
 	n.ESClient.EnsureIndex(ctx, "sshd_accepted_password")
 	n.ESClient.EnsureIndex(ctx, "sshd_failed_password")
