@@ -71,7 +71,7 @@ func (p *sshdParser) Parse(logLine string) (model.Event, error) {
 }
 
 func (p *sshdParser) parseSSHDTimestamp(timstamp string) (time.Time, error) {
-	ts, err := time.Parse(sshdTimeFormat, timstamp)
+	ts, err := time.ParseInLocation(sshdTimeFormat, timstamp, time.UTC)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to parse sshd timestamp: %w", err)
 	}
@@ -89,7 +89,7 @@ type execsnoopParser struct {
 }
 
 func NewExecsnoopParser() Parser {
-	regex := regexp.MustCompile(`^([\d\-T:Z]+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$`)
+	regex := regexp.MustCompile(`^([\dTZ:.\-]+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$`)
 	return &execsnoopParser{
 		regex: regex,
 	}
