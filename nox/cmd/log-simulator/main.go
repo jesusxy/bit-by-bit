@@ -12,7 +12,7 @@ import (
 const (
 	logFile             = "testdata/auth.log"
 	sshdTimeFormat      = "Jan _2 15:04:05"
-	execsnoopTimeFormat = time.RFC3339
+	execsnoopTimeFormat = time.RFC3339Nano
 )
 
 var (
@@ -73,7 +73,7 @@ func runScenario(name string) {
 
 		log.Println("Injecting: SSH Brute-Force")
 		for i := 0; i < 6; i++ {
-			timestamp := time.Now().Format(sshdTimeFormat)
+			timestamp := time.Now().UTC().Format(sshdTimeFormat)
 			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 			failedLog := fmt.Sprintf(failedLoginTemplate, timestamp, pid, "root", attackIP, port)
 			f.WriteString(failedLog)
@@ -83,7 +83,7 @@ func runScenario(name string) {
 		time.Sleep(3 * time.Second)
 
 		log.Println("Injecting: Successful Login post-brute-force")
-		timestampSuccess := time.Now().Format(sshdTimeFormat)
+		timestampSuccess := time.Now().UTC().Format(sshdTimeFormat)
 		sshdPID, portSuccess := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		successLog := fmt.Sprintf(acceptedLoginTemplate, timestampSuccess, sshdPID, "root", attackIP, portSuccess)
 		f.WriteString(successLog)
@@ -142,7 +142,7 @@ func runScenario(name string) {
 
 		// 3. Attacker immediately uses the new account to log in.
 		log.Printf("Injecting: Successful login for new user %s", newUser)
-		timestampLogin := time.Now().Format(sshdTimeFormat)
+		timestampLogin := time.Now().UTC().Format(sshdTimeFormat)
 		pidLogin, portLogin := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 		loginLog := fmt.Sprintf(acceptedLoginTemplate, timestampLogin, pidLogin, newUser, loginIP, portLogin)
 		f.WriteString(loginLog)
@@ -183,19 +183,19 @@ func runContinousSimulation() {
 			// Scenario: single suspicious command
 			scenario := suspiciousScenarios[rand.Intn(len(suspiciousScenarios))]
 			log.Printf("Injecting: Suspicious command (%s)", scenario.Name)
-			timestamp := time.Now().Format("15:04:05")
+			timestamp := time.Now().UTC().Format(execsnoopTimeFormat)
 			pid, ppid := rand.Intn(9000)+1000, rand.Intn(90000)+1000
 			logLine = fmt.Sprintf(execsnoopTemplate, timestamp, scenario.UID, scenario.Command, pid, ppid, 0, scenario.FullCommand)
 		case 1:
 			log.Printf("Injecting: Successful Login for jsmith")
-			timestamp := time.Now().Format("Jan  2 15:04:05")
+			timestamp := time.Now().UTC().Format(sshdTimeFormat)
 			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 			logLine = fmt.Sprintf(acceptedLoginTemplate, timestamp, pid, "jsmith", "193.99.144.80", port)
 		case 2:
 			// Single random failed Login
 			ip := fmt.Sprintf("10.10.10.%d", rand.Intn(254)+1)
 			log.Printf("Injecting: Random failed login from %s", ip)
-			timestamp := time.Now().Format(sshdTimeFormat)
+			timestamp := time.Now().UTC().Format(sshdTimeFormat)
 			pid, port := rand.Intn(9000)+1000, rand.Intn(60000)+1024
 			logLine = fmt.Sprintf(failedLoginTemplate, timestamp, pid, "admin", ip, port)
 		}
