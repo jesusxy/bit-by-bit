@@ -40,7 +40,7 @@ func (r *FailedLoginsRule) Evaluate(event model.Event, state *StateManager) *mod
 	}
 
 	var recentAttempts []time.Time
-	now := time.Now().UTC()
+	now := event.Timestamp
 	for _, t := range stateMgr.Attempts[ip] {
 		if now.Sub(t) <= r.Window {
 			recentAttempts = append(recentAttempts, t)
@@ -87,8 +87,8 @@ func (r *LoginLocationRule) Evaluate(event model.Event, state *StateManager) *mo
 	}
 
 	user := event.Metadata["user"]
-	country, ok := event.Metadata["country"]
-	if !ok || user == "" {
+	country := event.Metadata["country"]
+	if user == "" {
 		return nil // cant evaluate without user and country
 	}
 
