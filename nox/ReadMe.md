@@ -1,4 +1,4 @@
-# 🛡️ nox — An Intrusion Detection System
+# 🛡️ nox — An Intrusion Detection System & Threat Hunting Engine
 
 `nox` is a stateful Intrusion Detection System (IDS) engine written in Go from scratch. The purpose of this project is to explore and implement the core mechanics behind modern detection and response platforms, with a special focus on event correlation and attack chain analysis.
 
