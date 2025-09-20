@@ -13,6 +13,41 @@ This project demonstrates how to build a security engine that can ingest log dat
 - Prometheus: For exporting critical application and detection metrics.
 - Cobra & Viper: For building a professional, user-friendly CLI experience.
 
+## Architecture
+The `nox` ecosystem consists of several independent components that communicate over the network, simulating a real-world distributed security system.
+
+```
+                    +--------------------------------+
+                    |        Threat Analyst          |
+                    +--------------------------------+
+                                   |
+                                (gRPC)
+                                   |
+  +----------------------+         v          +-------------------------+
+  | Log Simulator        |       +-----------+   (TCP)   +-------------------------+
+  | (cmd/log-simulator)  |-----> | Log File  |---------> |      nox Engine         |
+  +----------------------+       +-----------+           |  (cmd/nox, internal/)   |
+                                                         |                         |
+                                                         | - Ingester              |
+                                                         | - Rule Engine           |
+                                                         | - gRPC Server           |
+                                                         +-------------------------+
+                                                                |         ^
+                                                                | (HTTP)  | (gRPC)
+                                                                v         |
+                                                         +-------------------------+
+                                                         |  Elasticsearch & Kibana |
+                                                         +-------------------------+
+
+
+```
+
+1. **Log Generation:** The log-simulator writes attack scenarios to a log file.
+2. **Ingestion:** The nox engine tails the log file, parses the lines, and enriches the data.
+3. **Detection & Alerting:** The Rule Engine analyzes the event stream, firing alerts for suspicious activity.
+4. **Data Persistence:** All processed events are indexed into Elasticsearch.
+5. **Threat Hunting:** An analyst uses the nox-cli to send gRPC requests to the nox engine, which then queries Elasticsearch to find historical data.
+
 ## Features
 
 - **Stateless Detection Engine:** Utilizes a flexible, YAML-based rule engine for high-speed pattern matching. Rules are mapped to the MITRE ATT&CK® Framework.
@@ -93,8 +128,8 @@ Then, run some queries:
 ```
 
 4. **View Observability & Data**
-- Prometheus Metrics: http://localhost:9090/metrics
-- Kibana UI: http://localhost:5601 (You can explore the raw event data in the process_executed and other indices).
+- Prometheus Metrics: `http://localhost:9090/metrics`
+- Kibana UI: `http://localhost:5601` (You can explore the raw event data in the process_executed and other indices).
 
 ## Project Structure
 The project follows the standard Go project layout to ensure a clean separation of concerns.
