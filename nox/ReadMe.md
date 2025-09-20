@@ -59,6 +59,9 @@ The `nox` ecosystem consists of several independent components that communicate 
   - GetProcessAncestry: For walking the process tree to find the root cause of an event.
 - **CLI Client:** nox-cli provides a polished, user-friendly interface for interacting with the gRPC API, complete with subcommands, flags, and formatted table output.
 
+## Demo
+![nox-demo](https://github.com/user-attachments/assets/d3e9e2df-433d-43b6-b3f8-1ff0ec8eae38)
+
 ## How To Run
 
 The entire environment is containerized and can be launched with **Docker Compose**.
