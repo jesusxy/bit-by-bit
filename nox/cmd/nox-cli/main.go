@@ -39,7 +39,7 @@ var searchCmd = &cobra.Command{
 		if startTimeStr != "" {
 			startTime, err = time.Parse(time.RFC3339, startTimeStr)
 			if err != nil {
-				log.Fatal("Invalid start-time format. Use RFC3339(e.g., '2023-01-01T15:04:05Z'): %v", err)
+				log.Fatalf("Invalid start-time format. Use RFC3339(e.g., '2023-01-01T15:04:05Z'): %v", err)
 			}
 		}
 
@@ -64,7 +64,12 @@ var searchCmd = &cobra.Command{
 
 		res, err := c.SearchEvents(ctx, req)
 		if err != nil {
-			log.Fatal("Could not perform search: %v", err)
+			log.Fatalf("Could not perform search: %v", err)
+		}
+
+		if len(res.ProcessEvents) == 0 {
+			log.Println("No matching events found.")
+			return
 		}
 
 		log.Printf("Found %d events: ", len(res.ProcessEvents))
