@@ -115,7 +115,7 @@ func (p *execsnoopParser) Parse(logLine string) (model.Event, error) {
 	return model.Event{
 		Timestamp: ts,
 		EventType: "Process_Executed",
-		Source:    "localhost",
+		Source:    "127.0.0.1",
 		Metadata: map[string]string{
 			"uid":          strings.TrimSpace(matches[2]),
 			"process_name": strings.TrimSpace(matches[3]),
