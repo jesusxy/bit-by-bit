@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"nox/internal/model"
 	"strings"
@@ -38,9 +39,22 @@ func (c *ESClient) IndexEvent(ctx context.Context, event model.Event) {
 
 	indexName := strings.ToLower(event.EventType)
 
-	_, err = c.Client.Index(indexName, bytes.NewReader(jsonData))
+	res, err := c.Client.Index(indexName, bytes.NewReader(jsonData))
 	if err != nil {
-		slog.Error("Failed to index event in Elasticsearch", "error", err)
+		slog.Error("Failed to index event in Elasticsearch", "error", err, "index", indexName)
+	}
+
+	defer res.Body.Close()
+
+	if res.IsError() {
+		// Read the full response body to get the detailed error from Elasticsearch.
+		body, _ := io.ReadAll(res.Body)
+		slog.Error(
+			"Elasticsearch returned an error during indexing",
+			"status", res.Status(),
+			"index", indexName,
+			"response_body", string(body),
+		)
 	}
 }
 
@@ -50,13 +64,12 @@ func (c *ESClient) EnsureIndex(ctx context.Context, indexName string) {
 		slog.Error("Failed to check if index exists", "error", err, "index", indexName)
 		return
 	}
+	defer res.Body.Close()
 
 	if res.IsError() && res.StatusCode != 404 {
 		slog.Error("Error checking index existence", "status", res.Status(), "index", indexName)
 		return
 	}
-
-	defer res.Body.Close()
 
 	if res.StatusCode == 200 {
 		slog.Debug("Index already exists, skipping creation.", "index", indexName)
