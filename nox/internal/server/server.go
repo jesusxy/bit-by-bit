@@ -27,7 +27,7 @@ type MatchClause struct {
 }
 
 type Query struct {
-	Bool *BoolClause `json: "bool,omitempty"`
+	Bool *BoolClause `json:"bool,omitempty"`
 }
 
 type BoolClause struct {
@@ -88,7 +88,7 @@ func (s *NoxAPIServer) SearchEvents(ctx context.Context, req *pb.SearchRequest) 
 	}
 
 	var filterClauses []any
-	if req.StartTime.IsValid() && req.EndTime.IsValid() {
+	if req.StartTime.GetSeconds() > 0 && req.EndTime.GetSeconds() > 0 {
 		filterClauses = append(filterClauses, RangeClause{
 			Range: map[string]TimeRange{
 				"Timestamp": {
@@ -235,7 +235,7 @@ func (s *NoxAPIServer) GetTopEvents(ctx context.Context, req *pb.TopNRequest) (*
 	}
 
 	size := 0
-	aggregationField := "Metadata." + req.Field + ".keyword"
+	aggregationField := "Metadata." + req.Field
 
 	query := ESQuery{
 		Size: &size,
@@ -249,7 +249,7 @@ func (s *NoxAPIServer) GetTopEvents(ctx context.Context, req *pb.TopNRequest) (*
 		},
 	}
 
-	if req.StartTime.IsValid() && req.EndTime.IsValid() {
+	if req.StartTime.GetSeconds() > 0 && req.EndTime.GetSeconds() > 0 {
 		query.Query = &Query{
 			Bool: &BoolClause{
 				Filter: []any{
