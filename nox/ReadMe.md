@@ -2,52 +2,95 @@
 
 `nox` is a stateful Intrusion Detection System (IDS) engine written in Go from scratch. The purpose of this project is to explore and implement the core mechanics behind modern detection and response platforms, with a special focus on event correlation and attack chain analysis.
 
-This project demonstrates how to build a security engine that can ingest, parse, and analyze log data to identify not just single suspicious events, but also the sequences of actions that indicate a sophisticated compromise.
+This project demonstrates how to build a security engine that can ingest log data in real-time, analyze it against multiple layers of detection logic, and provide a powerful gRPC API for security analysts to proactively hunt for threats in historical data.
+
+### Key Technologies
+
+- Go: For the core detection engine, API server, and clients.
+- gRPC / Protobuf: For high-performance, strongly-typed client-server communication.
+- Elasticsearch: As a scalable, durable backend for storing and querying all event data.
+- Docker / Docker Compose: For containerizing the entire application stack for easy deployment.
+- Prometheus: For exporting critical application and detection metrics.
+- Cobra & Viper: For building a professional, user-friendly CLI experience.
 
 ## Features
 
-- **Stateless Detection Engine:** Utilizes a flexible, YAML-based rule engine for high-speed pattern matching. Rules are mapped to the MITRE ATT&CK® Framework to provide industry-standard context for detections.
-
-- **Stateful Anomaly Detection:** Employs Go-based rules to track state over time and detect anomalies that span multiple events, such as SSH brute-force attacks and rapid process execution bursts.
-
-- **Event Correlation Engine:** The core of the engine. It connects seemingly disparate events and alerts to uncover multi-stage attack chains. It can detect sequences like:
-
-  - A brute-force attack followed by a successful login and defense evasion.
-  - A suspicious file download followed by its immediate execution.
-  - The creation of a new user account followed by its immediate use.
-
-- **IOC Matching:** Performs reputational checks by matching event indicators (like source IP addresses) against a configurable watchlist of known-bad Indicators of Compromise.
-- **Multi-Format Log Ingestion:** The ingester tails log files and uses a registry of parsers to handle different formats, including sshd authentication logs and execsnoop-style process execution logs.
+- Stateless Detection Engine: Utilizes a flexible, YAML-based rule engine for high-speed pattern matching. Rules are mapped to the MITRE ATT&CK® Framework.
+- Stateful Anomaly Detection: Employs Go-based rules to track state over time and detect anomalies that span multiple events, such as SSH brute-force attacks.
+- Event Correlation Engine: Connects seemingly disparate events to uncover multi-stage attack chains like "Download & Execute" or "Brute-Force & Evasion."
+- gRPC Threat Hunting API: A high-performance, strongly-typed API that allows an analyst to query historical event data. Key methods include:
+  - SearchEvents: For flexible, filter-based searches.
+  - GetTopEvents: For statistical analysis and finding the "most common" events.
+  - GetProcessAncestry: For walking the process tree to find the root cause of an event.
+- CLI Client: nox-cli provides a polished, user-friendly interface for interacting with the gRPC API, complete with subcommands, flags, and formatted table output.
 
 ## How To Run
 
 The entire environment is containerized and can be launched with **Docker Compose**.
 
-1. **Start the Engine:** From the root of the nox project, run:
+1. **Start the System:** From the root of the nox project, run:
 
 ```
 docker-compose up --build
 ```
 
-2. **Generate Log Events:** In a seperate terminal, run the simulator. You can run it in two modes.
-
-- **Chaos Mode (Default):** Generates a random mix of all supported log types
+2. **Generate Test Events**
+   In a separate terminal, use the refactored log-simulator to generate test data. \
+   First build the binary:
 
 ```
-go run ./cmd/log-simulator/main.go
+go build -o log-simulator ./cmd/log-simulator
 ```
 
-- **Targeted Test Case:** Generates a specific, deterministic attack chain to test a correlation rule.
+Then, run a test:
+
+- To run a specific attack chain:
 
 ```
 # Test the Brute-Force & Defense Evasion correlation
-go run ./cmd/log-simulator/main.go -testcase="bruteforce"
+./log-simulator --scenario=bruteforce
 
 # Test the Download & Execute correlation
-go run ./cmd/log-simulator/main.go -testcase="download"
+./log-simulator --scenario=download
 ```
 
-3. **Observe Alerts:** Watch the logs from the `nox-1` container in the first terminal. You will see alerts being generated in real-time as teh simulator writes to the log file.
+- To run a continuous stream of random events:
+
+```
+./log-simulator --continuous
+```
+
+Observe the logs in your docker-compose terminal to see alerts being generated in real-time.
+
+3. **Threat Hunt with `nox cli`**
+
+In a third terminal, use the `nox-cli` to query the data you just generated. \
+First, build the binary:
+
+```
+go build -o nox-cli ./cmd/nox-cli
+```
+
+Then, run some queries:
+
+- Find the top 5 most common process names:
+
+```
+./nox-cli top process_name --n 5
+```
+
+- Search for a specific command:
+
+```
+# Find the defense evasion command from the 'bruteforce' scenario
+./nox-cli search --filter command="history -c"
+```
+
+- Find the process ancestry for a given PID: (Use a PID from the search command above)
+
+```
+./nox-cli ancestry <PID_FROM_SEARCH>
+```
 
 ## Example Alert (Correlation)
 
