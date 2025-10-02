@@ -13,6 +13,8 @@ service NoxService {
     rpc SearchEvents(SearchRequest) returns (SearchResponse);
     rpc GetProcessAncestry(PIDRequest) returns (ProcessHistoryResponse);
     rpc GetTopEvents(TopNRequest) returns (TopNResponse);
+
+    rpc AnalyzeAlert(AnalyzeAlertRequest) returns (AnalyzeAlertResponse);
 }
 
 message QueryRequest {}
@@ -59,6 +61,16 @@ message TopNResponse {
     repeated Count results = 1;
 }
 
+message AnalyzeAlertRequest {
+    Alert alert = 1;
+}
+
+message AnalyzeAlertResponse {
+    string summary = 1;
+    string potential_impact = 2;
+    repeated string playbook_steps = 3;
+}
+
 // --- Data Structures ---
 
 message ProcessExecutionEvent {
@@ -68,4 +80,13 @@ message ProcessExecutionEvent {
     string pid = 4;
     string ppid = 5;
     string uid = 6;
+}
+
+message Alert {
+    string rule_name = 1;
+    string message = 2;
+    string severity = 3;
+    google.protobuf.Timestamp timestamp = 4; // is timestamp a keyword and has to be renamed here?
+    string source = 5;
+    map<string, string> metadata = 6;
 }

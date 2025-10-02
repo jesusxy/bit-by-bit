@@ -27,6 +27,7 @@ type NoxServiceClient interface {
 	SearchEvents(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	GetProcessAncestry(ctx context.Context, in *PIDRequest, opts ...grpc.CallOption) (*ProcessHistoryResponse, error)
 	GetTopEvents(ctx context.Context, in *TopNRequest, opts ...grpc.CallOption) (*TopNResponse, error)
+	AnalyzeAlert(ctx context.Context, in *AnalyzeAlertRequest, opts ...grpc.CallOption) (*AnalyzeAlertResponse, error)
 }
 
 type noxServiceClient struct {
@@ -82,6 +83,15 @@ func (c *noxServiceClient) GetTopEvents(ctx context.Context, in *TopNRequest, op
 	return out, nil
 }
 
+func (c *noxServiceClient) AnalyzeAlert(ctx context.Context, in *AnalyzeAlertRequest, opts ...grpc.CallOption) (*AnalyzeAlertResponse, error) {
+	out := new(AnalyzeAlertResponse)
+	err := c.cc.Invoke(ctx, "/nox.NoxService/AnalyzeAlert", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NoxServiceServer is the server API for NoxService service.
 // All implementations must embed UnimplementedNoxServiceServer
 // for forward compatibility
@@ -91,6 +101,7 @@ type NoxServiceServer interface {
 	SearchEvents(context.Context, *SearchRequest) (*SearchResponse, error)
 	GetProcessAncestry(context.Context, *PIDRequest) (*ProcessHistoryResponse, error)
 	GetTopEvents(context.Context, *TopNRequest) (*TopNResponse, error)
+	AnalyzeAlert(context.Context, *AnalyzeAlertRequest) (*AnalyzeAlertResponse, error)
 	mustEmbedUnimplementedNoxServiceServer()
 }
 
@@ -112,6 +123,9 @@ func (UnimplementedNoxServiceServer) GetProcessAncestry(context.Context, *PIDReq
 }
 func (UnimplementedNoxServiceServer) GetTopEvents(context.Context, *TopNRequest) (*TopNResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopEvents not implemented")
+}
+func (UnimplementedNoxServiceServer) AnalyzeAlert(context.Context, *AnalyzeAlertRequest) (*AnalyzeAlertResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AnalyzeAlert not implemented")
 }
 func (UnimplementedNoxServiceServer) mustEmbedUnimplementedNoxServiceServer() {}
 
@@ -216,6 +230,24 @@ func _NoxService_GetTopEvents_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NoxService_AnalyzeAlert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AnalyzeAlertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NoxServiceServer).AnalyzeAlert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/nox.NoxService/AnalyzeAlert",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NoxServiceServer).AnalyzeAlert(ctx, req.(*AnalyzeAlertRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NoxService_ServiceDesc is the grpc.ServiceDesc for NoxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +274,10 @@ var NoxService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopEvents",
 			Handler:    _NoxService_GetTopEvents_Handler,
+		},
+		{
+			MethodName: "AnalyzeAlert",
+			Handler:    _NoxService_AnalyzeAlert_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
