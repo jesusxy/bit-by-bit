@@ -40,42 +40,6 @@ var (
 		Name: "nox_alerts_by_severity_total",
 		Help: "Total number of alerts by severity",
 	}, []string{"severity"})
-
-	// eventsByTypeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-	// 	Name: "nox_events_by_type_total",
-	// 	Help: "Total number of events by type",
-	// }, []string{"event_type"})
-
-	// eventProcessingDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	// 	Name:    "nox_even_processing_duration_seconds",
-	// 	Help:    "Time spent processing events",
-	// 	Buckets: prometheus.DefBuckets,
-	// }, []string{"event_type"})
-
-	// geoIpLookupsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
-	// 	Name: "nox_goeip_lookups_total",
-	// 	Help: "Total number of geo lookups",
-	// }, []string{"status"}) // success, failure, skipped
-
-	// alertChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
-	// 	Name: "nox_alert_channel_size",
-	// 	Help: "Current size of alert channel buffer",
-	// })
-
-	// eventChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
-	// 	Name: "nox_event_channel_size",
-	// 	Help: "Current size of event channel buffer",
-	// })
-
-	// activeFailedLoginAttempts = prometheus.NewGauge(prometheus.GaugeOpts{
-	// 	Name: "nox_active_failed_login_attempts",
-	// 	Help: "Current number of active failed login attempt trackers",
-	// })
-
-	// activeUserLoginLocations = prometheus.NewGauge(prometheus.GaugeOpts{
-	// 	Name: "nox_active_user_login_locations",
-	// 	Help: "Current number of tracked user login locations",
-	// })
 )
 
 func init() {
@@ -124,7 +88,7 @@ func NewNox(cfg *Config, logger *slog.Logger) (*Nox, error) {
 
 	esClient, err := storage.NewESClient(cfg.Elasticsearch.URL)
 	if err != nil {
-		db.Close() // why do we close here instead of doing defer db.close() outside of this block
+		db.Close()
 		return nil, fmt.Errorf("could not crete Elasticsearch client: %w", err)
 	}
 
