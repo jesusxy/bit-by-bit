@@ -73,7 +73,7 @@ docker-compose up --build
 ```
 
 2. **Generate Test Events**
-   In a separate terminal, use the refactored log-simulator to generate test data. \
+   In a separate terminal, use the log-simulator to generate test data. \
    First build the binary:
 
 ```
