@@ -68,7 +68,7 @@ The entire environment is containerized and can be launched with **Docker Compos
 
 1. **Start the System:** From the root of the nox project, run:
 
-```
+```bash
 docker-compose up --build
 ```
 
@@ -76,15 +76,15 @@ docker-compose up --build
    In a separate terminal, use the log-simulator to generate test data. \
    First build the binary:
 
-```
+```bash
 go build -o log-simulator ./cmd/log-simulator
 ```
 
 Then, run a test:
 
-- To run a specific attack chain:
+To run a specific attack chain:
 
-```
+```bash
 # Test the Brute-Force & Defense Evasion correlation
 ./log-simulator --scenario=bruteforce
 
@@ -92,9 +92,8 @@ Then, run a test:
 ./log-simulator --scenario=download
 ```
 
-- To run a continuous stream of random events:
-
-```
+To run a continuous stream of random events:
+```bash
 ./log-simulator --continuous
 ```
 
@@ -105,7 +104,7 @@ Observe the logs in your docker-compose terminal to see alerts being generated i
 In a third terminal, use the `nox-cli` to query the data you just generated. \
 First, build the binary:
 
-```
+```bash
 go build -o nox-cli ./cmd/nox-cli
 ```
 
@@ -113,20 +112,20 @@ Then, run some queries:
 
 - Find the top 5 most common process names:
 
-```
+```bash
 ./nox-cli top process_name --n 5
 ```
 
 - Search for a specific command:
 
-```
+```bash
 # Find the defense evasion command from the 'bruteforce' scenario
 ./nox-cli search --filter command="history -c"
 ```
 
 - Find the process ancestry for a given PID: (Use a PID from the search command above)
 
-```
+```bash
 ./nox-cli ancestry <PID_FROM_SEARCH>
 ```
 
