@@ -54,9 +54,9 @@ The `nox` ecosystem consists of several independent components that communicate 
 - **Stateful Anomaly Detection:** Employs Go-based rules to track state over time and detect anomalies that span multiple events, such as SSH brute-force attacks.
 - **Event Correlation Engine:** Connects seemingly disparate events to uncover multi-stage attack chains like "Download & Execute" or "Brute-Force & Evasion."
 - **gRPC Threat Hunting API:** A high-performance, strongly-typed API that allows an analyst to query historical event data. Key methods include:
-  - SearchEvents: For flexible, filter-based searches.
-  - GetTopEvents: For statistical analysis and finding the "most common" events.
-  - GetProcessAncestry: For walking the process tree to find the root cause of an event.
+  - `SearchEvents`: For flexible, filter-based searches.
+  - `GetTopEvents`: For statistical analysis and finding the "most common" events.
+  - `GetProcessAncestry`: For walking the process tree to find the root cause of an event.
 - **CLI Client:** nox-cli provides a polished, user-friendly interface for interacting with the gRPC API, complete with subcommands, flags, and formatted table output.
 
 ## Demo
