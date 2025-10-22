@@ -66,7 +66,7 @@ The `nox` ecosystem consists of several independent components that communicate 
 
 The entire environment is containerized and can be launched with **Docker Compose**.
 
-#### Start the System 
+### Start the System 
 
 From the root of the nox project, run:
 
@@ -74,7 +74,7 @@ From the root of the nox project, run:
 docker-compose up --build
 ```
 
-#### Generate Test Events
+### Generate Test Events
 
 In a separate terminal, use the log-simulator to generate test data. \
 First build the binary:
@@ -83,7 +83,7 @@ First build the binary:
 go build -o log-simulator ./cmd/log-simulator
 ```
 
-#### Run a test:
+### Run a test:
 
 To run a specific attack chain:
 
@@ -102,7 +102,7 @@ To run a continuous stream of random events:
 
 Observe the logs in your docker-compose terminal to see alerts being generated in real-time.
 
-#### Threat Hunt with `nox cli`
+### Threat Hunt with `nox cli`
 
 In a third terminal, use the `nox-cli` to query the data you just generated. \
 First, build the binary:
@@ -132,7 +132,7 @@ Find the process ancestry for a given PID: (Use a PID from the search command ab
 ./nox-cli ancestry <PID_FROM_SEARCH>
 ```
 
-#### View Observability & Data
+### View Observability & Data
 Prometheus Metrics: `http://localhost:9090/metrics`
 Kibana UI: `http://localhost:5601` (You can explore the raw event data in the process_executed and other indices).
 
