@@ -143,9 +143,15 @@ func (n *Nox) Run(ctx context.Context) error {
 		return fmt.Errorf("elasticsearch not available")
 	}
 
-	n.ESClient.EnsureIndex(ctx, "process_executed")
-	n.ESClient.EnsureIndex(ctx, "sshd_accepted_password")
-	n.ESClient.EnsureIndex(ctx, "sshd_failed_password")
+	indices := []string{"process_executed", "sshd_accepted_password", "sshd_failed_password"}
+
+	for _, index := range indices {
+		err := n.ESClient.EnsureIndex(ctx, index)
+		if err != nil {
+			return fmt.Errorf("ensure required ElasticSearch index %q: %w", index, err)
+		}
+	}
+
 	n.Logger.Info("Elasticsearch indices are ready.")
 
 	eventChannel := make(chan model.Event, n.Config.BufferSize)
@@ -177,7 +183,7 @@ func (n *Nox) Run(ctx context.Context) error {
 					return
 				}
 
-				n.processEvent(event, alertChannel)
+				n.processEvent(event, alertChannel, ctx)
 			case <-ctx.Done():
 				n.Logger.Info("Context cancelled, stopping event processor")
 				return
@@ -264,10 +270,8 @@ func generateAlertID(alert model.Alert) string {
 }
 
 // --- Nox Methods (Engine Logic) ---
-func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert) {
+func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert, ctx context.Context) {
 	eventsProcessedTotal.Inc()
-
-	go n.ESClient.IndexEvent(context.Background(), event)
 
 	if event.Source != "localhost" && event.Source != "" {
 		ip := net.ParseIP(event.Source)
@@ -299,6 +303,16 @@ func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert) {
 		"source", event.Source,
 		"timestamp", event.Timestamp,
 	)
+
+	err := n.ESClient.IndexEvent(ctx, event)
+	if err != nil {
+		n.Logger.Error(
+			"failed to persist event",
+			"error", err,
+			"event_type", event.EventType,
+			"source", event.Source,
+		)
+	}
 
 	triggeredAlerts := n.RuleEngine.EvaluateEvent(event)
 

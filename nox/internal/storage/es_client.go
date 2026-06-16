@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"nox/internal/model"
 	"strings"
 
@@ -30,18 +29,22 @@ func NewESClient(address string) (*ESClient, error) {
 	return &ESClient{Client: es}, nil
 }
 
-func (c *ESClient) IndexEvent(ctx context.Context, event model.Event) {
+func (c *ESClient) IndexEvent(ctx context.Context, event model.Event) error {
 	jsonData, err := json.Marshal(event)
 	if err != nil {
-		slog.Error("Failed to marshal event for Elasticsearch", "error", err, "eventType", event.EventType)
-		return
+		return fmt.Errorf("[es] failed to marshal event for ES: %w - EventType: %s", err, event.EventType)
 	}
 
 	indexName := strings.ToLower(event.EventType)
 
-	res, err := c.Client.Index(indexName, bytes.NewReader(jsonData))
+	res, err := c.Client.Index(
+		indexName,
+		bytes.NewReader(jsonData),
+		c.Client.Index.WithContext(ctx),
+	)
+
 	if err != nil {
-		slog.Error("Failed to index event in Elasticsearch", "error", err, "index", indexName)
+		return fmt.Errorf("[es] failed to index event for ES: %w - IndexName: %s", err, indexName)
 	}
 
 	defer res.Body.Close()
@@ -49,34 +52,31 @@ func (c *ESClient) IndexEvent(ctx context.Context, event model.Event) {
 	if res.IsError() {
 		// Read the full response body to get the detailed error from Elasticsearch.
 		body, _ := io.ReadAll(res.Body)
-		slog.Error(
-			"Elasticsearch returned an error during indexing",
-			"status", res.Status(),
-			"index", indexName,
-			"response_body", string(body),
+		return fmt.Errorf("[es] error during indexing. status: %s - indexName: %s - response: %s",
+			res.Status(),
+			indexName,
+			string(body),
 		)
 	}
+
+	return nil
 }
 
-func (c *ESClient) EnsureIndex(ctx context.Context, indexName string) {
-	res, err := c.Client.Indices.Exists([]string{indexName})
+func (c *ESClient) EnsureIndex(ctx context.Context, indexName string) error {
+	res, err := c.Client.Indices.Exists([]string{indexName}, c.Client.Indices.Exists.WithContext(ctx))
 	if err != nil {
-		slog.Error("Failed to check if index exists", "error", err, "index", indexName)
-		return
+		return fmt.Errorf("[es] failed to check if index exists - error: %w, index: %s", err, indexName)
 	}
 	defer res.Body.Close()
 
 	if res.IsError() && res.StatusCode != 404 {
-		slog.Error("Error checking index existence", "status", res.Status(), "index", indexName)
-		return
+		return fmt.Errorf("[es] error checking index existence - status: %s, index: %s", res.Status(), indexName)
 	}
 
 	if res.StatusCode == 200 {
-		slog.Debug("Index already exists, skipping creation.", "index", indexName)
-		return
+		return nil
 	}
 
-	slog.Info("Index not found, creating with mapping.", "index", indexName)
 	mapping := `{
 		"mappings": {
 			"properties": {
@@ -98,12 +98,25 @@ func (c *ESClient) EnsureIndex(ctx context.Context, indexName string) {
 		}
 	}`
 
-	res, err = c.Client.Indices.Create(indexName, c.Client.Indices.Create.WithBody(strings.NewReader(mapping)))
-	if err != nil || res.IsError() {
-		slog.Error("Failed to create index", "error", err, "status", res.Status())
-	} else {
-		slog.Info("Successfully created index with mapping", "index", indexName)
+	res, err = c.Client.Indices.Create(
+		indexName,
+		c.Client.Indices.Create.WithBody(strings.NewReader(mapping)),
+		c.Client.Indices.Create.WithContext(ctx),
+	)
+	if err != nil {
+		return fmt.Errorf("[es] failed to create index - err: %w ", err)
 	}
 
 	defer res.Body.Close()
+
+	if res.IsError() {
+		body, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("[es] error during index creation. status: %s - indexName: %s - response: %s",
+			res.Status(),
+			indexName,
+			string(body),
+		)
+	}
+
+	return nil
 }
