@@ -95,7 +95,7 @@ var ancestryCmd = &cobra.Command{
 
 		res, err := c.GetProcessAncestry(ctx, req)
 		if err != nil {
-			log.Fatal("Could not get process ancestry: %v", err)
+			log.Fatalf("Could not get process ancestry: %v", err)
 		}
 
 		log.Printf("Process Ancestry for PID %s (newest first): ", pid)
