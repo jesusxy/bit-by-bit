@@ -1,6 +1,7 @@
 testdata/GeoLite2-City.mmdb
 
 Todo.md
+.DS_Store
 
 # binaries
 log-simulator
