@@ -42,6 +42,8 @@ var (
 	}, []string{"severity"})
 )
 
+const shutdownTimeout = 5 * time.Second
+
 func init() {
 	prometheus.MustRegister(eventsProcessedTotal)
 	prometheus.MustRegister(alertsTriggeredTotal)
@@ -392,7 +394,7 @@ func (n *Nox) startMetricsServer(ctx context.Context) {
 	go func() {
 		defer n.wg.Done()
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			slog.Error("Metrics server shutdown error", "error", err)
@@ -427,7 +429,20 @@ func (n *Nox) startGRPCServer(ctx context.Context) {
 	go func() {
 		defer n.wg.Done()
 		<-ctx.Done()
-		s.GracefulStop()
+
+		done := make(chan struct{})
+
+		go func() {
+			s.GracefulStop()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(shutdownTimeout):
+			n.Logger.Warn("gRPC graceful shutdown timed out, forcing stop")
+			s.Stop()
+		}
 	}()
 }
 
