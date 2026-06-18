@@ -49,12 +49,12 @@ func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.E
 		return fmt.Errorf("failed to tail file: %v", err)
 	}
 
-	i.logger.Info("Started tailling log file", "path", fpath)
+	defer t.Stop()
+	i.logger.Info("Started tailing log file", "path", fpath)
 
 	for {
 		select {
 		case <-ctx.Done():
-			t.Stop()
 			i.logger.Info("Stopping log file tailing due to context cancellation.", "path", fpath)
 			return nil
 		case line, ok := <-t.Lines:
@@ -74,7 +74,13 @@ func (i *Ingester) TailFile(ctx context.Context, fpath string, ch chan<- model.E
 				break
 			}
 			i.logger.Debug("Parsed event", "type", event.EventType, "source", event.Source)
-			ch <- event
+
+			select {
+			case ch <- event:
+			case <-ctx.Done():
+				i.logger.Info("Stopping log file tailing due to context cancellation.", "path", fpath)
+				return nil
+			}
 		}
 	}
 }
