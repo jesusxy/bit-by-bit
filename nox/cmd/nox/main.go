@@ -306,16 +306,6 @@ func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert, c
 		"timestamp", event.Timestamp,
 	)
 
-	err := n.ESClient.IndexEvent(ctx, event)
-	if err != nil {
-		n.Logger.Error(
-			"failed to persist event",
-			"error", err,
-			"event_type", event.EventType,
-			"source", event.Source,
-		)
-	}
-
 	triggeredAlerts := n.RuleEngine.EvaluateEvent(event)
 
 	for _, alert := range triggeredAlerts {
@@ -328,6 +318,16 @@ func (n *Nox) processEvent(event model.Event, alertChannel chan<- model.Alert, c
 				"source", alert.Source,
 			)
 		}
+	}
+
+	err := n.ESClient.IndexEvent(ctx, event)
+	if err != nil {
+		n.Logger.Error(
+			"failed to persist event",
+			"error", err,
+			"event_type", event.EventType,
+			"source", event.Source,
+		)
 	}
 }
 
