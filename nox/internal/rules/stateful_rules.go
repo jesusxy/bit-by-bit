@@ -34,34 +34,42 @@ func (r *FailedLoginsRule) Evaluate(event model.Event, state *StateManager) *mod
 	defer stateMgr.mu.Unlock()
 
 	ip := event.Source
+	user := event.Metadata["user"]
 
-	if stateMgr.AlertedIPs[ip] {
-		return nil // already alerted for this IP
+	if user == "" {
+		return nil
+	}
+
+	key := ip + "|" + user
+
+	if stateMgr.AlertedIPs[key] {
+		return nil
 	}
 
 	var recentAttempts []time.Time
 	now := event.Timestamp
-	for _, t := range stateMgr.Attempts[ip] {
+	for _, t := range stateMgr.Attempts[key] {
 		if now.Sub(t) <= r.Window {
 			recentAttempts = append(recentAttempts, t)
 		}
 	}
 
 	recentAttempts = append(recentAttempts, event.Timestamp)
-	stateMgr.Attempts[ip] = recentAttempts
+	stateMgr.Attempts[key] = recentAttempts
 
 	if len(recentAttempts) >= r.Threshold {
-		stateMgr.AlertedIPs[ip] = true
+		stateMgr.AlertedIPs[key] = true
 
 		return &model.Alert{
 			RuleName:  r.Name(),
-			Message:   fmt.Sprintf("Detected %d failed SSH logins from %s in the last minute.", len(recentAttempts), ip),
+			Message:   fmt.Sprintf("Detected %d failed SSH logins from %s for user %s in the last minute.", len(recentAttempts), ip, user),
 			Severity:  "HIGH",
 			Timestamp: event.Timestamp,
 			Source:    ip,
 			Metadata: map[string]string{
 				"attempt_count": fmt.Sprintf("%d", len(recentAttempts)),
 				"time_window":   r.Window.String(),
+				"user":          user,
 			},
 		}
 	}

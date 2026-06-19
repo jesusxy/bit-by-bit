@@ -53,7 +53,7 @@ func TestFailedLoginsRuleEvaluate(t *testing.T) {
 
 			var alerts []model.Alert
 			for _, offset := range tt.attemptOffsets {
-				alert := rule.Evaluate(failedLoginEvent(baseTime.Add(offset), sourceIP), state)
+				alert := rule.Evaluate(failedLoginEvent(baseTime.Add(offset), sourceIP, "root"), state)
 				if alert != nil {
 					alerts = append(alerts, *alert)
 				}
@@ -84,13 +84,29 @@ func TestFailedLoginsRuleEvaluate(t *testing.T) {
 	}
 }
 
-func failedLoginEvent(timestamp time.Time, source string) model.Event {
+func TestFailedLoginsRuleEvaluate_DifferentUsersSameIPDoesNotAlert(t *testing.T) {
+	rule := NewFailedLoginsRule()
+	state := NewStateManager()
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+	sourceIP := "203.0.113.10"
+
+	users := []string{"root", "admin", "deploy", "postgres", "ubuntu"}
+
+	for i, user := range users {
+		alert := rule.Evaluate(failedLoginEvent(baseTime.Add(time.Duration(i)*time.Second), sourceIP, user), state)
+		if alert != nil {
+			t.Fatalf("got alert for mixed users, want none")
+		}
+	}
+}
+
+func failedLoginEvent(timestamp time.Time, source, user string) model.Event {
 	return model.Event{
 		Timestamp: timestamp,
 		EventType: "SSHD_Failed_Password",
 		Source:    source,
 		Metadata: map[string]string{
-			"user": "root",
+			"user": user,
 		},
 	}
 }
