@@ -100,6 +100,40 @@ func TestFailedLoginsRuleEvaluate_DifferentUsersSameIPDoesNotAlert(t *testing.T)
 	}
 }
 
+func TestPasswordSprayRuleEvaluate_MultipleUsersSameIPAlerts(t *testing.T) {
+	rule := NewPasswordSprayRule()
+	state := NewStateManager()
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+	sourceIP := "203.0.113.10"
+
+	users := []string{"root", "admin", "deploy", "postgres", "ubuntu"}
+	var alert *model.Alert
+
+	for i, user := range users {
+		alert = rule.Evaluate(failedLoginEvent(baseTime.Add(time.Duration(i)*time.Second), sourceIP, user), state)
+		if i < len(users)-1 && alert != nil {
+			t.Fatalf("got early alert at attempt: %d", i+1)
+		}
+	}
+
+	if alert == nil {
+		t.Fatalf("got nil alert, wanted password spray alert")
+	}
+
+	if alert.RuleName != "PasswordSpray" {
+		t.Fatalf("got rule name %q, want %q", alert.RuleName, "PasswordSpray")
+	}
+	if alert.Source != sourceIP {
+		t.Fatalf("got source ip %q want %q", alert.Source, sourceIP)
+	}
+	if alert.Metadata["user_count"] != "5" {
+		t.Fatalf("got user_count %q, want %q", alert.Metadata["user_count"], "5")
+	}
+	if alert.Metadata["time_window"] != "1m0s" {
+		t.Fatalf("got time_window %q, want %q", alert.Metadata["time_window"], "1m0s")
+	}
+}
+
 func failedLoginEvent(timestamp time.Time, source, user string) model.Event {
 	return model.Event{
 		Timestamp: timestamp,

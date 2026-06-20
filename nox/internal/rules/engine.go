@@ -34,6 +34,7 @@ func NewEngine(logger *slog.Logger, state *StateManager, yamlRules []RuleDefinit
 			NewLoginLocationRule(),
 			NewRapidProcessExecutionRuile(),
 			NewIPWatchlistRule(),
+			NewPasswordSprayRule(),
 		},
 		correlationRules: []CorrelationRule{
 			NewBruteForceAndEvasionRule(),

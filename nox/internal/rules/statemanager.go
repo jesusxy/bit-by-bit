@@ -53,6 +53,12 @@ type SuspiciousLoginState struct {
 	Logins map[string]time.Time // Key: Source IP, Value: Timestamp of the suspicious login.
 }
 
+type PasswordSprayState struct {
+	mu         sync.Mutex
+	Attempts   map[string][]SprayAttempt
+	AlertedIPs map[string]bool
+}
+
 type StateManager struct {
 	FailedLogins            *FailedLoginState
 	IPWatchlist             *IPWatchlistState
@@ -62,6 +68,7 @@ type StateManager struct {
 	PostBruteForceLogins    *PostBruteForceLoginState
 	StagedPayloads          *StagedPayloadState
 	SuspiciousLoginTracker  *SuspiciousLoginState
+	PasswordSpray           *PasswordSprayState
 }
 
 func NewStateManager() *StateManager {
@@ -89,6 +96,10 @@ func NewStateManager() *StateManager {
 		},
 		SuspiciousLoginTracker: &SuspiciousLoginState{
 			Logins: make(map[string]time.Time),
+		},
+		PasswordSpray: &PasswordSprayState{
+			Attempts:   make(map[string][]SprayAttempt),
+			AlertedIPs: make(map[string]bool),
 		},
 	}
 }

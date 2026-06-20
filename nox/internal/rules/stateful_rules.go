@@ -242,3 +242,88 @@ func (r *IPWatchlistRule) Evaluate(event model.Event, state *StateManager) *mode
 
 	return nil
 }
+
+// --- PasswordSpray Rule ---
+
+type PasswordSprayRule struct {
+	Window    time.Duration
+	Threshold int
+}
+
+type SprayAttempt struct {
+	Timestamp time.Time
+	User      string
+}
+
+func (r *PasswordSprayRule) Name() string {
+	return "PasswordSpray"
+}
+
+func NewPasswordSprayRule() Rule {
+	return &PasswordSprayRule{
+		Window:    60 * time.Second,
+		Threshold: 5,
+	}
+}
+
+func (r *PasswordSprayRule) Evaluate(event model.Event, state *StateManager) *model.Alert {
+	if event.EventType != "SSHD_Failed_Password" {
+		return nil
+	}
+
+	ip := event.Source
+	user := event.Metadata["user"]
+	stateMgr := state.PasswordSpray
+
+	if user == "" || ip == "" {
+		return nil
+	}
+
+	stateMgr.mu.Lock()
+	defer stateMgr.mu.Unlock()
+
+	if stateMgr.AlertedIPs[ip] {
+		return nil
+	}
+
+	var recentAttempts []SprayAttempt
+	now := event.Timestamp
+	for _, t := range stateMgr.Attempts[ip] {
+		if now.Sub(t.Timestamp) <= r.Window {
+			recentAttempts = append(recentAttempts, SprayAttempt{
+				Timestamp: t.Timestamp,
+				User:      t.User,
+			})
+		}
+	}
+
+	recentAttempts = append(recentAttempts, SprayAttempt{
+		Timestamp: event.Timestamp,
+		User:      user,
+	})
+
+	stateMgr.Attempts[ip] = recentAttempts
+
+	users := make(map[string]bool)
+	for _, attempt := range recentAttempts {
+		users[attempt.User] = true
+	}
+
+	if len(users) >= r.Threshold {
+		stateMgr.AlertedIPs[ip] = true
+
+		return &model.Alert{
+			RuleName:  r.Name(),
+			Message:   fmt.Sprintf("Detected failed SSH logins from %s against %d distinct users in %s.", ip, len(users), r.Window),
+			Severity:  "HIGH",
+			Timestamp: event.Timestamp,
+			Source:    ip,
+			Metadata: map[string]string{
+				"user_count":  fmt.Sprintf("%d", len(users)),
+				"time_window": r.Window.String(),
+			},
+		}
+	}
+
+	return nil
+}
