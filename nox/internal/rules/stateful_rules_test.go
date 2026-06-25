@@ -134,6 +134,40 @@ func TestPasswordSprayRuleEvaluate_MultipleUsersSameIPAlerts(t *testing.T) {
 	}
 }
 
+func TestPasswordSprayRuleEvaluate_SameIPSameUserDoesNotAlert(t *testing.T) {
+	rule := NewPasswordSprayRule()
+	state := NewStateManager()
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+	sourceIP := "203.0.113.10"
+
+	users := []string{"root", "root", "root", "root", "root"}
+
+	for i, user := range users {
+		alert := rule.Evaluate(failedLoginEvent(baseTime.Add(time.Duration(i)*time.Second), sourceIP, user), state)
+
+		if alert != nil {
+			t.Fatalf("got alert for same ip same user, want none")
+		}
+	}
+}
+
+func TestPasswordSprayRuleEvaluate_UsersOutsideWindowDoesNotAlert(t *testing.T) {
+	rule := NewPasswordSprayRule()
+	state := NewStateManager()
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+	sourceIP := "203.0.113.10"
+
+	users := []string{"root", "admin", "deploy", "postgres", "ubuntu"}
+
+	for i, user := range users {
+		alert := rule.Evaluate(failedLoginEvent(baseTime.Add(time.Duration(i)*61*time.Second), sourceIP, user), state)
+
+		if alert != nil {
+			t.Fatalf("got alert for users outside window, want none")
+		}
+	}
+}
+
 func failedLoginEvent(timestamp time.Time, source, user string) model.Event {
 	return model.Event{
 		Timestamp: timestamp,
