@@ -96,7 +96,7 @@ func (r *LoginLocationRule) Evaluate(event model.Event, state *StateManager) *mo
 
 	user := event.Metadata["user"]
 	country := event.Metadata["country"]
-	if user == "" {
+	if user == "" || country == "" {
 		return nil // cant evaluate without user and country
 	}
 

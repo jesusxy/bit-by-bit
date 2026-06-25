@@ -178,3 +178,58 @@ func failedLoginEvent(timestamp time.Time, source, user string) model.Event {
 		},
 	}
 }
+
+// -- new country login -- //
+
+func TestNewLoginLocationEvaluate_FirstCountryDoesAlert(t *testing.T) {
+	rule := NewLoginLocationRule()
+	state := NewStateManager()
+	sourceIP := "203.0.113.10"
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+
+	event := acceptedLoginEvent(baseTime, sourceIP, "root", "US")
+	alert := rule.Evaluate(event, state)
+
+	if alert == nil {
+		t.Fatalf("did not get alert for New country")
+	}
+
+	if alert.RuleName != "NewCountryLogin" {
+		t.Fatalf("got ruleName %q, want %q", alert.RuleName, "NewCountryLogin")
+	}
+	if alert.Source != sourceIP {
+		t.Fatalf("got source ip %q, want %q", alert.Source, sourceIP)
+	}
+	if alert.Metadata["user"] != "root" {
+		t.Fatalf("got user %q, want %q", alert.Metadata["user"], "root")
+	}
+	if alert.Metadata["country"] != "US" {
+		t.Fatalf("got country %q, want %q", alert.Metadata["country"], "US")
+	}
+}
+
+func TestNewLoginLocationEvaluate_NoCountryDoesNotAlert(t *testing.T) {
+	rule := NewLoginLocationRule()
+	state := NewStateManager()
+	sourceIP := "203.0.113.10"
+	baseTime := time.Date(2026, time.June, 19, 12, 0, 0, 0, time.UTC)
+
+	event := acceptedLoginEvent(baseTime, sourceIP, "root", "")
+	alert := rule.Evaluate(event, state)
+
+	if alert != nil {
+		t.Fatal("got alert without country, want none")
+	}
+}
+
+func acceptedLoginEvent(timestamp time.Time, source, user, country string) model.Event {
+	return model.Event{
+		Timestamp: timestamp,
+		EventType: "SSHD_Accepted_Password",
+		Source:    source,
+		Metadata: map[string]string{
+			"user":    user,
+			"country": country,
+		},
+	}
+}
